@@ -10,11 +10,11 @@ const defaultUrl = process.env.VERCEL_URL
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: {
-    default: "Quantify | Intelligent Financial Operating System",
-    template: "%s | Quantify",
+    default: "Aura | Automated Universal Risk Assessment",
+    template: "%s | Aura",
   },
   description:
-    "Quantify unifies treasury automation, forecasting, and investor reporting so finance teams can move faster with confidence.",
+    "Aura is a glass-box RegTech cockpit that streams multi-agent Enhanced Due Diligence with auditable risk reports in real time.",
 };
 
 const geistSans = Geist({
