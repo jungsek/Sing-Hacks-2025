@@ -16,7 +16,7 @@ const navItems = [
   { label: "Dashboard", icon: LayoutDashboard, href: "/dashboard" },
   { label: "Transactions", icon: CreditCard, href: "/transactions" },
   { label: "Cases / Docs", icon: FolderOpen, href: "/documents" },
-  { label: "Rules", icon: ShieldCheck, href: "/rules" },
+  { label: "Regulations", icon: ShieldCheck, href: "/regulations" },
 ];
 
 export function JbSidebar({ className }: { className?: string }) {
