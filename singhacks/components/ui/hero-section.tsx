@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 import { Activity, ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
 
 import { BackgroundBeams } from "@/components/ui/background-beams";
@@ -70,64 +70,6 @@ const navLinks = [
 
 export default function HeroSectionOne() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  async function generateTestPdf() {
-    try {
-      setPdfLoading(true);
-
-      const payload = {
-        title: 'DOCUMENT & TRANSACTION RISK ANALYSIS REPORT',
-        generatedOn: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }),
-        generatedBy: 'Cheong Zhi Xun, Compliance Officer',
-        items: ['Item one', 'Item two', 'Item three'],
-        filename: 'compliance-report',
-        // Client fields (pre-filled for quick testing)
-        clientName: 'Tan Wei Jun',
-        clientId: 'C-00984',
-        jurisdiction: 'Singapore',
-        regulator: 'MAS',
-        customerRiskRating: 'High',
-        pepStatus: 'Yes',
-        lastKycCompleted: '15 Sep 2025',
-        eddRequired: 'Yes',
-      };
-
-      const res = await fetch('/api/pdf', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const text = await res.text().catch(() => '');
-        throw new Error(`PDF generation failed: ${res.status} ${text}`);
-      }
-
-      const blob = await res.blob();
-
-      // try to extract filename from content-disposition header
-      const cd = res.headers.get('Content-Disposition') || '';
-      const match = cd.match(/filename="?([^";]+)"?/i);
-      const filename = match ? match[1] : 'test.pdf';
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-    } catch (err: any) {
-      // simple client-side feedback; keep UX minimal
-      // eslint-disable-next-line no-console
-      console.error(err);
-      alert(err?.message || 'Failed to generate PDF.');
-    } finally {
-      setPdfLoading(false);
-    }
-  }
 
   return (
     <section className="relative overflow-hidden">
@@ -297,15 +239,6 @@ export default function HeroSectionOne() {
                 View live demo
                 <Activity className="size-4" aria-hidden="true" />
               </Link>
-            </Button>
-            <Button
-              size="lg"
-              variant="secondary"
-              className="gap-2"
-              onClick={generateTestPdf}
-              disabled={pdfLoading}
-            >
-              {pdfLoading ? 'Generating...' : 'Generate Test PDF'}
             </Button>
           </motion.div>
           <motion.div
