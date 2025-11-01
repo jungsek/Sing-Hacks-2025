@@ -153,7 +153,11 @@ export default function DashboardPage() {
                     </CardDescription>
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => window.location.href = '/transactions'}
+                    >
                       View all
                     </Button>
                     <Button size="sm" className="gap-1">
