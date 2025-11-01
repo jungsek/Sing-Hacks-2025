@@ -1,12 +1,130 @@
-import type { ReactElement } from 'react';
+import type { ReactElement } from "react";
 
 export type PdfFont = { name: string; path: string };
 
 export type PdfOptions = {
   filename?: string;
-  format?: string; // e.g. 'A4'
+  format?: string;
   fonts?: PdfFont[];
 };
+
+const getErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  return JSON.stringify(error ?? "");
+};
+
+const toBufferChunk = (chunk: unknown): Buffer => {
+  if (typeof Buffer === "undefined") {
+    throw new Error("Buffer is not available in this environment");
+  }
+
+  if (Buffer.isBuffer(chunk)) {
+    return chunk;
+  }
+
+  if (chunk instanceof Uint8Array) {
+    return Buffer.from(chunk);
+  }
+
+  if (chunk instanceof ArrayBuffer) {
+    return Buffer.from(chunk);
+  }
+
+  if (typeof chunk === "string") {
+    return Buffer.from(chunk);
+  }
+
+  throw new TypeError(`Unsupported PDF chunk type: ${typeof chunk}`);
+};
+
+const isAsyncIterable = (value: unknown): value is AsyncIterable<unknown> => {
+  if (!value) return false;
+  return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function";
+};
+
+const isNodeReadable = (value: unknown): value is NodeJS.ReadableStream => {
+  return Boolean(value && typeof (value as NodeJS.ReadableStream).on === "function");
+};
+
+const isWebReadableStream = (value: unknown): value is ReadableStream<Uint8Array> => {
+  return Boolean(value && typeof (value as ReadableStream<Uint8Array>).getReader === "function");
+};
+
+async function collectFromAsyncIterable(iterable: AsyncIterable<unknown>): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of iterable) {
+    chunks.push(toBufferChunk(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+async function collectFromNodeStream(stream: NodeJS.ReadableStream): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  await new Promise<void>((resolve, reject) => {
+    stream.on("data", (data: unknown) => {
+      try {
+        chunks.push(toBufferChunk(data));
+      } catch (conversionError) {
+        reject(conversionError);
+      }
+    });
+    stream.on("end", resolve);
+    stream.on("error", reject);
+  });
+  return Buffer.concat(chunks);
+}
+
+async function collectFromWebStream(stream: ReadableStream<Uint8Array>): Promise<Buffer> {
+  const reader = stream.getReader();
+  const parts: Uint8Array[] = [];
+
+   
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (value) {
+      parts.push(value);
+    }
+  }
+
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0);
+  const merged = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const part of parts) {
+    merged.set(part, offset);
+    offset += part.length;
+  }
+  return Buffer.from(merged);
+}
+
+async function normalisePdfOutput(output: unknown): Promise<Buffer> {
+  if (typeof Buffer === "undefined") {
+    throw new Error("Buffer constructor not available in this runtime");
+  }
+
+  if (Buffer.isBuffer(output)) {
+    return output;
+  }
+
+  if (isNodeReadable(output)) {
+    return collectFromNodeStream(output);
+  }
+
+  if (isAsyncIterable(output)) {
+    return collectFromAsyncIterable(output);
+  }
+
+  if (isWebReadableStream(output)) {
+    return collectFromWebStream(output);
+  }
+
+  if (output instanceof Uint8Array || output instanceof ArrayBuffer || typeof output === "string") {
+    return toBufferChunk(output);
+  }
+
+  return Buffer.from(String(output ?? ""));
+}
 
 /**
  * Render a React PDF Document (built with @react-pdf/renderer) to a Buffer.
@@ -14,134 +132,68 @@ export type PdfOptions = {
  * The function uses dynamic imports so the repo doesn't require @react-pdf/renderer
  * unless you actually use PDF generation. If the package is not installed, the
  * function throws a helpful error instructing how to add it.
- *
- * Input: a ReactElement created with @react-pdf/renderer's primitives (Document/Page/...)
- * Output: Promise<Buffer>
  */
 export async function generatePdf(
   doc: ReactElement,
-  options: PdfOptions = {}
+  options: PdfOptions = {},
 ): Promise<Buffer> {
   try {
-    // import at runtime to avoid requiring the package when not used
-    const pdfModule = await import('@react-pdf/renderer');
+    const pdfModule = await import("@react-pdf/renderer");
 
-    // register fonts if provided
-    if (options.fonts && options.fonts.length > 0) {
-      const { Font } = pdfModule;
-      options.fonts.forEach((f) => {
+    if (Array.isArray(options.fonts) && options.fonts.length > 0 && pdfModule.Font) {
+      for (const font of options.fonts) {
         try {
-          Font.register({ family: f.name, src: f.path });
-        } catch (e) {
-          // continue; invalid font paths will surface when rendering
+          pdfModule.Font.register({ family: font.name, src: font.path });
+        } catch (fontError) {
+          const message = getErrorMessage(fontError);
+          console.warn(`Failed to register font '${font.name}': ${message}`);
         }
-      });
+      }
     }
 
-    const instance = pdfModule.pdf(doc as any);
+    const instance = pdfModule.pdf(doc);
+    const candidates = instance as unknown as {
+      toBuffer?: () => Promise<unknown>;
+      toStream?: () => Promise<unknown>;
+    };
 
-    // toBuffer/toStream may return different types depending on environment and versions:
-    // - Buffer (Node)
-    // - Node Readable stream
-    // - Web ReadableStream (has getReader)
-    // We'll detect and normalize to a Node Buffer.
-    let output: any;
+    let output: unknown;
 
-    if (typeof (instance as any).toBuffer === 'function') {
-      // Preferred when available
+    if (typeof candidates.toBuffer === "function") {
       try {
-        output = await (instance as any).toBuffer();
-      } catch (innerErr: any) {
-        // augment error with some runtime diagnostics to help debugging
-        const methods = Object.keys(instance || {}).join(', ');
-        const msg = `toBuffer() failed: ${innerErr?.message || String(innerErr)}; instanceKeys=${methods}`;
-        const e: any = new Error(msg);
-        e.cause = innerErr;
-        throw e;
+        output = await candidates.toBuffer();
+      } catch (innerError) {
+        const methods = Object.keys(instance as Record<string, unknown>).join(", ");
+        const message = getErrorMessage(innerError);
+        const augmented = new Error(`toBuffer() failed: ${message}; instanceKeys=${methods}`);
+        augmented.cause = innerError instanceof Error ? innerError : undefined;
+        throw augmented;
       }
-    } else if (typeof (instance as any).toStream === 'function') {
-      // Some versions expose toStream
+    } else if (typeof candidates.toStream === "function") {
       try {
-        output = await (instance as any).toStream();
-      } catch (innerErr: any) {
-        const methods = Object.keys(instance || {}).join(', ');
-        const msg = `toStream() failed: ${innerErr?.message || String(innerErr)}; instanceKeys=${methods}`;
-        const e: any = new Error(msg);
-        e.cause = innerErr;
-        throw e;
+        output = await candidates.toStream();
+      } catch (innerError) {
+        const methods = Object.keys(instance as Record<string, unknown>).join(", ");
+        const message = getErrorMessage(innerError);
+        const augmented = new Error(`toStream() failed: ${message}; instanceKeys=${methods}`);
+        augmented.cause = innerError instanceof Error ? innerError : undefined;
+        throw augmented;
       }
     } else {
-      // Fallback: instance itself might be a stream-like object
-      output = instance as any;
+      output = instance;
     }
 
-    // If it's already a Buffer, return directly
-    if (typeof Buffer !== 'undefined' && Buffer.isBuffer(output)) {
-      return output as Buffer;
-    }
-
-    // If it's a Node Readable stream (has pipe or is async iterable), collect chunks
-    if (output && (typeof output.pipe === 'function' || Symbol.asyncIterator in Object(output))) {
-      const chunks: Buffer[] = [];
-      // support async iterator
-      try {
-        for await (const chunk of output as AsyncIterable<any>) {
-          chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-        }
-      } catch (e) {
-        // if async iterator fails, try stream 'data' events
-        const stream = output as NodeJS.ReadableStream & { on?: any };
-        await new Promise<void>((resolve, reject) => {
-          stream.on && stream.on('data', (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-          stream.on && stream.on('end', () => resolve());
-          stream.on && stream.on('error', (err: any) => reject(err));
-        });
-      }
-      return Buffer.concat(chunks);
-    }
-
-    // If it's a Web ReadableStream (getReader), read chunks and concatenate
-    if (output && typeof output.getReader === 'function') {
-      const reader = output.getReader();
-      const parts: Uint8Array[] = [];
-      while (true) {
-        // read() returns { value, done }
-        // eslint-disable-next-line no-await-in-loop
-        const { value, done } = await reader.read();
-        if (done) break;
-        if (value) {
-          // value may be Uint8Array or ArrayBuffer
-          parts.push(value instanceof Uint8Array ? value : new Uint8Array(value));
-        }
-      }
-      const total = parts.reduce((s, p) => s + p.length, 0);
-      const merged = new Uint8Array(total);
-      let offset = 0;
-      for (const p of parts) {
-        merged.set(p, offset);
-        offset += p.length;
-      }
-      return Buffer.from(merged.buffer ?? merged);
-    }
-
-    // Fallback: try to convert whatever we got into a Buffer
-    try {
-      return Buffer.from(output as any);
-    } catch (e) {
-      throw new Error('Unable to convert PDF output to Buffer: ' + String(e));
-    }
-  } catch (err: any) {
-    // If import failed, provide actionable guidance
-    if (
-      /Cannot find module|ERR_MODULE_NOT_FOUND/.test(String(err.message || err))
-    ) {
+    return await normalisePdfOutput(output);
+  } catch (error) {
+    const message = getErrorMessage(error);
+    if (/Cannot find module|ERR_MODULE_NOT_FOUND/.test(message)) {
       throw new Error(
-        "@react-pdf/renderer is not installed. Run: 'npm install @react-pdf/renderer' or 'pnpm add @react-pdf/renderer' and retry. If you plan to use Puppeteer instead, implement generatePdf accordingly."
+        "@react-pdf/renderer is not installed. Run: 'npm install @react-pdf/renderer' or 'pnpm add @react-pdf/renderer' and retry. If you plan to use Puppeteer instead, implement generatePdf accordingly.",
       );
     }
 
-    // Re-throw other errors
-    throw err;
+    if (error instanceof Error) throw error;
+    throw new Error(message);
   }
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, Globe } from "lucide-react";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import { cn } from "@/lib/utils";
 
 export function JbTopbar({ className }: { className?: string }) {
@@ -31,3 +31,4 @@ export function JbTopbar({ className }: { className?: string }) {
     </header>
   );
 }
+

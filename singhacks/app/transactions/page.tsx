@@ -1,247 +1,285 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RuleHit } from "@/app/langgraph/common/state";
+import type { SerializableRecord } from "@/lib/types";
 import { JbSidebar } from "@/components/ui/jb-sidebar";
 import { JbTopbar } from "@/components/ui/jb-topbar";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ArrowUpRight, Flag, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
-const RAW_TXNS = [
-  {
-    transaction_id: "ad66338d-b17f-47fc-a966-1b4395351b41",
-    booking_jurisdiction: "HK",
-    regulator: "HKMA/SFC",
-    booking_datetime: "2024-10-10T10:24:43",
-    amount: 590012.92,
-    currency: "HKD",
-    originator_name: "Meredith Krueger",
-    originator_country: "AE",
-    beneficiary_name: "Natalie Sandoval",
-    beneficiary_country: "CN",
-    travel_rule_complete: true,
-    sanctions_screening: "potential",
-    customer_risk_rating: "High",
-  },
-  {
-    transaction_id: "135cef35-c054-46f0-8d8d-daedb7429de4",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-02-23T23:56:23",
-    amount: 1319007.62,
-    currency: "GBP",
-    originator_name: "Jennifer Parker",
-    beneficiary_name: "George Brown",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Medium",
-  },
-  {
-    transaction_id: "f037efc0-8438-4af3-9f68-959cd9c9dcb2",
-    booking_jurisdiction: "CH",
-    regulator: "FINMA",
-    booking_datetime: "2024-06-26T23:40:37",
-    amount: 233935.3,
-    currency: "GBP",
-    originator_name: "Nicole Guerra DVM",
-    beneficiary_name: "Candace Nichols",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Low",
-  },
-  {
-    transaction_id: "f7589c12-dccb-4ae1-8ad3-324db3316a56",
-    booking_jurisdiction: "HK",
-    regulator: "HKMA/SFC",
-    booking_datetime: "2024-05-03T00:08:29",
-    amount: 1778002.31,
-    currency: "GBP",
-    originator_name: "Jeremy Williams",
-    beneficiary_name: "Connor Smith",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Medium",
-  },
-  {
-    transaction_id: "e83da102-9121-4a2f-9f80-8fb4c63e4d78",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-07-12T09:35:19",
-    amount: 540.0,
-    currency: "SGD",
-    originator_name: "Tan Mei Ling",
-    beneficiary_name: "Shopee Pte Ltd",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Low",
-  },
-  {
-    transaction_id: "12c449f2-37ef-4fda-8245-c1eb5cf4c9b0",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-08-08T15:02:45",
-    amount: 21450.75,
-    currency: "SGD",
-    originator_name: "Ahmad Bin Zaki",
-    beneficiary_name: "DBS Bank Ltd",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Low",
-  },
-  {
-    transaction_id: "a55efc80-c278-4e5a-bc8f-bd9a901e55f1",
-    booking_jurisdiction: "JP",
-    regulator: "JFSA",
-    booking_datetime: "2024-11-15T11:30:00",
-    amount: 850000.0,
-    currency: "JPY",
-    originator_name: "Satoshi Nakamura",
-    beneficiary_name: "Miyuki Tanaka",
-    travel_rule_complete: false,
-    sanctions_screening: "none",
-    customer_risk_rating: "Medium",
-  },
-  {
-    transaction_id: "b77cc8e1-48a2-4fa1-88c3-93d17333b24a",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-09-22T20:12:01",
-    amount: 120.5,
-    currency: "SGD",
-    originator_name: "John Tan",
-    beneficiary_name: "Netflix Singapore",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Low",
-  },
-  {
-    transaction_id: "c55dabc3-1df7-4b0d-9a80-77d3156c199b",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-12-25T18:50:40",
-    amount: 2000000.0,
-    currency: "USD",
-    originator_name: "William Chen",
-    beneficiary_name: "ABC Trading Co.",
-    travel_rule_complete: true,
-    sanctions_screening: "potential",
-    customer_risk_rating: "High",
-  },
-  {
-    transaction_id: "d99b2b7a-4e91-41e5-8020-ef1c99df785a",
-    booking_jurisdiction: "SG",
-    regulator: "MAS",
-    booking_datetime: "2024-12-28T21:22:10",
-    amount: 980.25,
-    currency: "SGD",
-    originator_name: "Lim Pei Wen",
-    beneficiary_name: "Grab Holdings Ltd",
-    travel_rule_complete: true,
-    sanctions_screening: "none",
-    customer_risk_rating: "Low",
-  },
-];
+// Row shape rendered in the table
+type Row = {
+  transaction_id: string;
+  booking_jurisdiction?: string;
+  regulator?: string;
+  booking_datetime?: string;
+  amount?: number;
+  currency?: string;
+  originator_name?: string;
+  originator_country?: string;
+  beneficiary_name?: string;
+  beneficiary_country?: string;
+  travel_rule_complete?: boolean;
+  sanctions_screening?: string;
+  customer_risk_rating?: string;
+  status: "flagged" | "reviewed" | "cleared";
+  reason: string;
+  score?: number;
+  severity?: "low" | "medium" | "high";
+  justAdded?: boolean; // for animation on insert
+  alert_payload?: (SerializableRecord & {
+    rule_hits?: RuleHit[];
+  }) | null; // full alert JSON for details view
+};
 
-
-// 2) Screening logic – you can make this smarter later.
-//    This takes a raw row and returns what the table should display.
-function screenTransaction(raw: any) {
-  // default
-  let status: "flagged" | "reviewed" | "cleared" = "cleared";
-  let displayRisk = raw.customer_risk_rating || "Low";
+function initialReason(row: Partial<Row>): {
+  status: Row["status"];
+  reason: string;
+  displayRisk: string;
+} {
+  let status: Row["status"] = "cleared";
+  let displayRisk = row.customer_risk_rating || "Low";
   let reason = "Transaction consistent with customer profile";
 
-  // rule 1: very high amount
-  if (raw.amount > 1_000_000) {
+  if ((row.amount ?? 0) > 1_000_000) {
     status = "flagged";
     displayRisk = "High";
     reason = "High-value transaction above threshold";
   }
-
-  // rule 2: sanctions screening potential
-  if (raw.sanctions_screening === "potential") {
+  if (row.sanctions_screening === "potential") {
     status = "flagged";
     displayRisk = "High";
     reason = "Sanctions / watchlist hit (potential)";
   }
-
-  // rule 3: missing travel rule
-  if (raw.travel_rule_complete === false) {
-    status = "reviewed";
+  if (row.travel_rule_complete === false) {
+    status = status === "flagged" ? status : "reviewed";
     displayRisk = displayRisk === "High" ? "High" : "Medium";
-    reason = "Travel rule incomplete – requires review";
+    reason = status === "flagged" ? reason : "Travel rule incomplete – requires review";
   }
 
-  return {
-    transaction_id: raw.transaction_id,
-    booking_jurisdiction: raw.booking_jurisdiction,
-    regulator: raw.regulator,
-    amount: raw.amount,
-    currency: raw.currency,
-    originator_name: raw.originator_name,
-    beneficiary_name: raw.beneficiary_name,
-    customer_risk_rating: displayRisk,
-    status,
-    reason,
-  };
+  return { status, reason, displayRisk };
 }
 
 export default function TransactionsPage() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [scannedCount, setScannedCount] = useState(0);
+  const abortRef = useRef<AbortController | null>(null);
+  const [selected, setSelected] = useState<Row | null>(null);
 
-  const handleRunScreening = () => {
+  // Buffered rendering queue to ensure steady, one-by-one insertion pace
+  const pendingQueueRef = useRef<Row[]>([]);
+  const drainingRef = useRef(false);
+  const paceMsRef = useRef<number>(140); // adjust cadence here
+
+  const startDrain = useCallback(() => {
+    if (drainingRef.current) return;
+    drainingRef.current = true;
+    const drainOnce = () => {
+      const item = pendingQueueRef.current.shift();
+      if (item) {
+        setRows((prev) => [{ ...item, justAdded: true }, ...prev]);
+        setScannedCount((c) => c + 1);
+        // schedule next
+        setTimeout(drainOnce, paceMsRef.current);
+      } else {
+        drainingRef.current = false;
+      }
+    };
+    setTimeout(drainOnce, paceMsRef.current);
+  }, []);
+
+  // Restore persisted rows on first load
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("txn_rows_v1");
+      if (raw) {
+        const parsed: Row[] = JSON.parse(raw);
+        if (Array.isArray(parsed)) setRows(parsed);
+      }
+    } catch {}
+  }, []);
+
+  // Persist rows to sessionStorage whenever they change
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("txn_rows_v1", JSON.stringify(rows));
+    } catch {}
+  }, [rows]);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+    const timer = setTimeout(() => {
+      setRows((prev) => prev.map((r) => (r.justAdded ? { ...r, justAdded: false } : r)));
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [rows]);
+
+  const handleRunScreening = useCallback(async () => {
     if (isStreaming) return;
     setIsStreaming(true);
-    setTransactions([]);
+    setRows([]); // reset view, but previous rows remain in sessionStorage backup until replaced
     setScannedCount(0);
+    pendingQueueRef.current = [];
 
-    RAW_TXNS.forEach((raw, index) => {
-      setTimeout(() => {
-        const screened = screenTransaction(raw);
-        setTransactions((prev) => [screened, ...prev]);
-        setScannedCount((c) => c + 1);
+    const controller = new AbortController();
+    abortRef.current = controller;
 
-        if (index === RAW_TXNS.length - 1) {
-          setIsStreaming(false);
+    try {
+      const res = await fetch("/api/aml/monitor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv_demo: true, concurrency: 8 }),
+        signal: controller.signal,
+      });
+      if (!res.body) {
+        setIsStreaming(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let idx: number;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const chunk = buffer.slice(0, idx).trimEnd();
+          buffer = buffer.slice(idx + 2);
+
+          let type: string | undefined;
+          let dataStr = "";
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("event:")) type = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataStr += line.slice(5).trim();
+          }
+          if (!type || !dataStr) continue;
+
+          try {
+            const payload = JSON.parse(dataStr);
+            // Ingest CSV rows as table entries
+            if (
+              type === "on_tool_call" &&
+              payload?.node === "ingest" &&
+              payload?.data?.type === "csv_row"
+            ) {
+              const meta = payload.data.meta || {};
+              const base: Partial<Row> = {
+                transaction_id: payload.data.transaction_id,
+                booking_jurisdiction: meta.booking_jurisdiction,
+                regulator: meta.regulator,
+                booking_datetime: meta.booking_datetime,
+                amount: meta.amount,
+                currency: meta.currency,
+                originator_name: meta.originator_name,
+                originator_country: meta.originator_country,
+                beneficiary_name: meta.beneficiary_name,
+                beneficiary_country: meta.beneficiary_country,
+                travel_rule_complete: meta.travel_rule_complete,
+                sanctions_screening: meta.sanctions_screening,
+                customer_risk_rating: meta.customer_risk_rating,
+              } as Partial<Row>;
+              const { status, reason, displayRisk } = initialReason(base);
+              const row: Row = {
+                transaction_id: base.transaction_id!,
+                booking_jurisdiction: base.booking_jurisdiction,
+                regulator: base.regulator,
+                booking_datetime: base.booking_datetime,
+                amount: base.amount,
+                currency: base.currency,
+                originator_name: base.originator_name,
+                originator_country: base.originator_country,
+                beneficiary_name: base.beneficiary_name,
+                beneficiary_country: base.beneficiary_country,
+                travel_rule_complete: base.travel_rule_complete,
+                sanctions_screening: base.sanctions_screening,
+                customer_risk_rating: displayRisk,
+                status,
+                reason,
+                justAdded: true,
+              };
+              // enqueue and start paced drain
+              pendingQueueRef.current.push(row);
+              startDrain();
+              continue;
+            }
+
+            // When alert artifacts arrive, enrich matching row with score/severity and tighten status
+            if (type === "on_artifact" && payload?.data?.alert?.json?.transaction_id) {
+              const alert = payload.data.alert;
+              setRows((prev) =>
+                prev.map((r) =>
+                  r.transaction_id === alert.json.transaction_id
+                    ? {
+                        ...r,
+                        score: alert.json.score,
+                        severity: alert.severity,
+                        status: alert.severity === "high" ? "flagged" : r.status,
+                        reason: r.reason || "Alert raised by Transaction Agent",
+                        alert_payload: (alert.json as SerializableRecord | undefined) ?? null,
+                      }
+                    : r,
+                ),
+              );
+              continue;
+            }
+          } catch {
+            // ignore
+          }
         }
-      }, (index + 1) * 1200);
-    });
-  };
+      }
+    } catch {
+      // ignore
+    } finally {
+      setIsStreaming(false);
+      abortRef.current = null;
+    }
+  }, [isStreaming, startDrain]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#e6ecf3] dark:bg-slate-950/10">
       {/* 1) FIXED SIDEBAR */}
-      <div className="fixed inset-y-0 left-0 w-64 z-40 bg-background">
+      <div className="fixed inset-y-0 left-0 z-40 w-64 bg-background">
         <JbSidebar />
       </div>
 
       {/* 2) MAIN CONTENT SHIFTED RIGHT */}
-      <div className="ml-64 flex flex-col min-h-screen">
+      <div className="ml-64 flex min-h-screen flex-col">
         <JbTopbar />
 
         <main className="flex flex-col gap-8 p-8">
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Transaction Monitoring
-              </h1>
+              <h1 className="text-3xl font-bold tracking-tight">Transaction Monitoring</h1>
               <p className="text-muted-foreground">
                 Real-time flagged transactions and rule-based monitoring insights.
               </p>
             </div>
           </div>
 
-          <Card className="shadow-md border-border/70 bg-background/80 backdrop-blur">
+          <Card className="border-border/70 bg-background/80 shadow-md backdrop-blur">
             <CardHeader>
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -250,8 +288,8 @@ export default function TransactionsPage() {
                   </CardTitle>
                   <CardDescription>
                     {isStreaming
-                      ? `Screening ${scannedCount}/${RAW_TXNS.length} incoming transactions…`
-                      : `Showing ${transactions.length} screened transactions.`}
+                      ? `Screening ${scannedCount} incoming transactions…`
+                      : `Showing ${rows.length} screened transactions.`}
                   </CardDescription>
                 </div>
 
@@ -261,7 +299,7 @@ export default function TransactionsPage() {
                   onClick={handleRunScreening}
                   disabled={isStreaming}
                 >
-                  {isStreaming ? "Running..." : "Run screening"}
+                  {isStreaming ? "Running..." : "Run live"}
                   <ArrowUpRight className="h-3 w-3" />
                 </Button>
               </div>
@@ -299,42 +337,44 @@ export default function TransactionsPage() {
                       <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                         Reason
                       </th>
+                      <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                        Details
+                      </th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-border/40">
-                    {transactions.map((txn) => (
+                    {rows.map((txn) => (
                       <tr
                         key={txn.transaction_id}
                         className={cn(
-                          "hover:bg-muted/30 transition",
-                          txn.customer_risk_rating === "High" &&
-                            "bg-red-50 dark:bg-red-950/10",
+                          "transition hover:bg-muted/30",
+                          txn.justAdded && "duration-200 animate-in fade-in zoom-in-95",
+                          txn.customer_risk_rating === "High" && "bg-red-50 dark:bg-red-950/10",
                           txn.customer_risk_rating === "Medium" &&
                             "bg-amber-50 dark:bg-amber-950/10",
                           txn.customer_risk_rating === "Low" &&
-                            "bg-green-50/40 dark:bg-green-950/10"
+                            "bg-green-50/40 dark:bg-green-950/10",
                         )}
                       >
-                        <td className="px-4 py-3 font-medium">
-                          {txn.transaction_id.slice(0, 8)}…
-                        </td>
+                        <td className="px-4 py-3 font-medium">{txn.transaction_id.slice(0, 8)}…</td>
                         <td className="px-4 py-3">{txn.booking_jurisdiction}</td>
                         <td className="px-4 py-3">{txn.regulator}</td>
                         <td className="px-4 py-3">{txn.originator_name}</td>
                         <td className="px-4 py-3">{txn.beneficiary_name}</td>
                         <td className="px-4 py-3">
-                          {txn.amount.toLocaleString()} {txn.currency}
+                          {typeof txn.amount === "number" ? txn.amount.toLocaleString() : "-"}{" "}
+                          {txn.currency}
                         </td>
                         <td className="px-4 py-3">
                           <Badge
                             className={cn(
                               txn.customer_risk_rating === "High" &&
-                                "bg-red-500/10 text-red-600 border-red-500/20",
+                                "border-red-500/20 bg-red-500/10 text-red-600",
                               txn.customer_risk_rating === "Medium" &&
-                                "bg-amber-500/10 text-amber-600 border-amber-500/20",
+                                "border-amber-500/20 bg-amber-500/10 text-amber-600",
                               txn.customer_risk_rating === "Low" &&
-                                "bg-green-500/10 text-green-600 border-green-500/20"
+                                "border-green-500/20 bg-green-500/10 text-green-600",
                             )}
                           >
                             {txn.customer_risk_rating}
@@ -357,18 +397,18 @@ export default function TransactionsPage() {
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">
-                          {txn.reason}
+                        <td className="px-4 py-3 text-muted-foreground">{txn.reason}</td>
+                        <td className="px-4 py-3">
+                          <Button size="sm" variant="outline" onClick={() => setSelected(txn)}>
+                            View
+                          </Button>
                         </td>
                       </tr>
                     ))}
 
                     {isStreaming && (
                       <tr>
-                        <td
-                          colSpan={9}
-                          className="px-4 py-3 text-xs text-muted-foreground italic"
-                        >
+                        <td colSpan={10} className="px-4 py-3 text-xs italic text-muted-foreground">
                           Screening in progress… new alerts will appear at the top.
                         </td>
                       </tr>
@@ -380,6 +420,51 @@ export default function TransactionsPage() {
           </Card>
         </main>
       </div>
+
+      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Alert details</DialogTitle>
+            <DialogDescription>
+              Transaction {selected?.transaction_id?.slice(0, 12)}…
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Amount</span>
+              <span className="font-medium">
+                {typeof selected?.amount === "number" ? selected?.amount.toLocaleString() : "-"}{" "}
+                {selected?.currency}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Score</span>
+              <span className="font-medium">{selected?.score ?? "-"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Severity</span>
+              <span className="font-medium capitalize">{selected?.severity ?? "-"}</span>
+            </div>
+            {selected?.alert_payload?.rule_hits?.length ? (
+              <div>
+                <div className="mb-1 text-muted-foreground">Rule hits</div>
+                <ul className="list-disc space-y-1 pl-5">
+                  {(selected.alert_payload?.rule_hits ?? []).map((hit, idx) => (
+                    <li key={idx} className="leading-snug">
+                      <span className="font-medium">{hit.rule_id}</span>: {hit.rationale} ({hit.weight})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setSelected(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

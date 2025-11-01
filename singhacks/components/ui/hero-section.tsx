@@ -70,6 +70,55 @@ const navLinks = [
 
 export default function HeroSectionOne() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function generateTestPdf() {
+    try {
+      setPdfLoading(true);
+
+      const payload = {
+        title: 'Test PDF from UI',
+        subtitle: 'Generated from the main page',
+        items: ['Item one', 'Item two', 'Item three'],
+        filename: 'test',
+      };
+
+      const res = await fetch('/api/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`PDF generation failed: ${res.status} ${text}`);
+      }
+
+      const blob = await res.blob();
+
+      // try to extract filename from content-disposition header
+      const cd = res.headers.get('Content-Disposition') || '';
+      const match = cd.match(/filename="?([^";]+)"?/i);
+      const filename = match ? match[1] : 'test.pdf';
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (error: unknown) {
+      // simple client-side feedback; keep UX minimal
+       
+      console.error(error);
+      const message = error instanceof Error ? error.message : 'Failed to generate PDF.';
+      alert(message);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
 
   return (
     <section className="relative overflow-hidden">
