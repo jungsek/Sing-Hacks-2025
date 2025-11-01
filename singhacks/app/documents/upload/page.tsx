@@ -57,7 +57,48 @@ export default function UploadDocumentPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
+  const [caseId, setCaseId] = useState<string | number | null>(null);
   const errorTimeoutRef = useRef<number | null>(null);
+
+  // Start analysis (placeholder async task). Caller should set submitted=true before calling.
+  // startAnalysis: runs placeholder analysis and, if caseId provided, updates the case status to 'pending action'
+  const startAnalysis = async (caseIdParam?: string | number) => {
+    setAnalyzing(true);
+    setAnalysisResult(null);
+    try {
+      // Placeholder for real analysis API call. Replace with fetch(...) later.
+      await new Promise((r) => setTimeout(r, 1200));
+      setAnalysisResult({ status: 'done', summary: 'Dummy analysis completed' });
+
+      // If we have a case id, call the server route to update its status to 'pending action'
+      if (caseIdParam) {
+        try {
+          const res = await fetch('/api/documents/update-case', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ caseId: caseIdParam, status: 'pending action' }),
+          });
+
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            // include the error in analysisResult for visibility
+            setAnalysisResult((prev: any) => ({ ...(prev || {}), updateCase: { ok: false, error: text || res.status } }));
+          } else {
+            const data = await res.json().catch(() => ({}));
+            setAnalysisResult((prev: any) => ({ ...(prev || {}), updateCase: data }));
+          }
+        } catch (err: any) {
+          setAnalysisResult((prev: any) => ({ ...(prev || {}), updateCase: { ok: false, error: String(err) } }));
+        }
+      }
+    } catch (err) {
+      setAnalysisResult({ status: 'error', error: String(err) });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -133,6 +174,8 @@ export default function UploadDocumentPage() {
           body: JSON.stringify({
             clientName,
             clientId: `CL-${clientId}`,
+            // set initial case status to 'processing' so backend/users know it's being analyzed
+            status: 'processing',
             documentId: firstDocumentId,
             files: results,
           }),
@@ -143,9 +186,23 @@ export default function UploadDocumentPage() {
           throw new Error(`Create case failed: ${caseRes.status} ${text}`);
         }
 
-    // mark submitted after case creation and keep it true until page reload
-  setSubmitted(true);
-  setShowSuccess(true);
+        // parse the create-case response to obtain the created case id
+        const caseJson = await caseRes.json().catch(() => ({}));
+
+        const returnedCase = caseJson?.case ?? null;
+        const returnedCaseId = returnedCase?.id ?? null;
+
+        // mark submitted after case creation and keep it true until page reload
+        setSubmitted(true);
+        setShowSuccess(true);
+
+        // keep the case id for later updates
+        if (returnedCaseId) setCaseId(returnedCaseId);
+
+        // Automatically start analysis after successful create-case.
+        // We run a placeholder async task here; replace with real API call later.
+        // Pass the returned case id so startAnalysis can update the case status when done.
+        await startAnalysis(returnedCaseId ?? undefined);
       } catch (err: any) {
         // show error but keep upload results available
         setUploadError(err?.message || String(err));
@@ -263,7 +320,8 @@ export default function UploadDocumentPage() {
                 <h1 className="text-2xl font-semibold">Document Processor</h1>
                 </div>
             </div>
-          <Card className="max-w-2xl  bg-white/70 dark:bg-slate-900/40">
+          <div className="flex flex-col lg:flex-row gap-4">
+            <Card className="flex-1 max-w-2xl  bg-white/70 dark:bg-slate-900/40">
             <CardHeader>
               <CardTitle>Upload document</CardTitle>
             </CardHeader>
@@ -392,7 +450,37 @@ export default function UploadDocumentPage() {
                 </div>
               </form>
             </CardContent>
-          </Card>
+            </Card>
+
+            {/* Analysis card: appears to the right when a submission has been made */}
+            {submitted ? (
+              <Card className="w-80 bg-white/70 dark:bg-slate-900/40">
+                <CardHeader>
+                  <CardTitle>Analysis</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {analyzing ? (
+                      <div className="flex items-center gap-3">
+                        <svg className="animate-spin h-5 w-5 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                        </svg>
+                        <span className="text-sm font-medium">Analyzing...</span>
+                      </div>
+                    ) : analysisResult ? (
+                      <div>
+                        <div className="text-sm font-medium">Analysis complete</div>
+                        <div className="text-xs text-muted-foreground mt-1">{analysisResult.summary ?? JSON.stringify(analysisResult)}</div>
+                      </div>
+                    ) : (
+                      <div className="text-sm text-muted-foreground">Ready — analysis will start automatically after submit.</div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
+          </div>
         </main>
       </div>
     </div>

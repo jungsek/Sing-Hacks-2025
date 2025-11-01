@@ -106,16 +106,6 @@ export default function DocumentsPage() {
         ],
       };
 
-      // Known client-specific values (user-provided)
-      if (doc.id === "C-00984") {
-        payload.jurisdiction = "Singapore";
-        payload.regulator = "MAS";
-        payload.customerRiskRating = "High";
-        payload.pepStatus = "Yes";
-        payload.lastKycCompleted = "15 Sep 2025";
-        payload.eddRequired = "Yes";
-      }
-
       const res = await fetch("/api/pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -185,16 +175,29 @@ export default function DocumentsPage() {
                     </CardDescription>
                   </div>
                   <div className="text-right">
-                    <Badge variant={doc.status === "Open" ? "destructive" : "secondary"}>
+                    <Badge
+                      variant={
+                        doc.status === "Open"
+                          ? "destructive"
+                          : doc.status === "processing"
+                          ? "default"
+                          : "secondary"
+                      }
+                      // Ensure the badge does not change on hover by keeping hover styles identical
+                      className={
+                        doc.status === 'pending action'
+                          ? 'bg-emerald-400 text-slate-900 hover:bg-emerald-400 hover:text-slate-900'
+                          : undefined
+                      }
+                    >
                       {doc.status}
                     </Badge>
                     <div className="mt-1 text-xs text-muted-foreground">Updated {doc.updated}</div>
                   </div>
                 </CardHeader>
                 <CardContent className="flex items-center justify-between gap-2 px-4 py-3">
-                  <div className="text-sm text-muted-foreground">Actions</div>
-                  <div className="flex gap-2">
-                    <Link href={`/documents/${doc.id}`} className="no-underline">
+                  <div className="flex gap-2 ml-auto">
+                    <Link href={`/documents/case/${doc.id}`} className="no-underline">
                       <Button size="sm" variant="outline">
                         View
                       </Button>
