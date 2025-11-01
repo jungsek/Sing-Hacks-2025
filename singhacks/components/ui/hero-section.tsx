@@ -77,10 +77,20 @@ export default function HeroSectionOne() {
       setPdfLoading(true);
 
       const payload = {
-        title: 'Test PDF from UI',
-        subtitle: 'Generated from the main page',
+        title: 'DOCUMENT & TRANSACTION RISK ANALYSIS REPORT',
+        generatedOn: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }),
+        generatedBy: 'Cheong Zhi Xun, Compliance Officer',
         items: ['Item one', 'Item two', 'Item three'],
-        filename: 'test',
+        filename: 'compliance-report',
+        // Client fields (pre-filled for quick testing)
+        clientName: 'Tan Wei Jun',
+        clientId: 'C-00984',
+        jurisdiction: 'Singapore',
+        regulator: 'MAS',
+        customerRiskRating: 'High',
+        pepStatus: 'Yes',
+        lastKycCompleted: '15 Sep 2025',
+        eddRequired: 'Yes',
       };
 
       const res = await fetch('/api/pdf', {
