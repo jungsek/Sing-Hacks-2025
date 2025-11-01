@@ -1,46 +1,71 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { JbSidebar } from "@/components/ui/jb-sidebar";
 import { JbTopbar } from "@/components/ui/jb-topbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-const documents = [
-  {
-    id: 'C-00984',
-    title: 'EDD Review - Tan Wei Jun',
-    client: 'Tan Wei Jun',
-    updated: '15 Sep 2025',
-    status: 'Open',
-  },
-  {
-    id: 'D-20251028-01',
-    title: 'Sanctions match report',
-    client: 'Crypto Holdings Ltd',
-    updated: '28 Oct 2025',
-    status: 'In progress',
-  },
-];
+import { createClient } from "@/lib/supabase/client";
 
 export default function DocumentsPage() {
-  const [loadingId, setLoadingId] = useState<string | null>(null);
+  type CaseItem = { id: string; title: string; client: string; clientId?: string; updated: string; status: string };
 
-  async function downloadDoc(doc: { id: string; title: string; client: string }) {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [documents, setDocuments] = useState<CaseItem[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const client = createClient();
+
+    (async () => {
+      try {
+        const { data, error } = await client
+          .from("aml_cases")
+          .select("id, title, client_name, client_id, status, updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(50);
+
+        if (error) throw error;
+        if (!mounted) return;
+
+        const mapped = (data ?? []).map((r: any) => ({
+          id: r.id,
+          title: r.title ?? `Case ${r.id}`,
+          client: r.client_name ?? "",
+          clientId: r.client_id ?? "",
+          updated: r.updated_at ? new Date(r.updated_at).toLocaleDateString("en-GB", { timeZone: "Asia/Singapore" }) : "",
+          status: r.status ?? "Open",
+        }));
+
+        if (mapped.length > 0) setDocuments(mapped);
+      } catch (err) {
+        // keep initial documents on error
+        // eslint-disable-next-line no-console
+        console.error("Failed to load aml_cases", err);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  async function downloadDoc(doc: { id: string; title: string; client: string; clientId?: string }) {
     try {
       setLoadingId(doc.id);
 
       // Build payload for PDF generation. Add extra client fields for known sample case.
       const payload: any = {
-        title: 'DOCUMENT & TRANSACTION RISK ANALYSIS REPORT',
+        title: 'DOCUMENT RISK ANALYSIS REPORT',
         generatedOn: new Date().toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }),
         generatedBy: 'System',
         items: [doc.title],
         filename: `report-${doc.id}`,
         clientName: doc.client,
-        clientId: doc.id,
+        clientId: doc.clientId,
       };
 
       // Known client-specific values (user-provided)
@@ -112,7 +137,10 @@ export default function DocumentsPage() {
                 <CardHeader className="flex flex-row items-center justify-between gap-4">
                   <div>
                     <CardTitle className="text-lg font-semibold">{doc.title}</CardTitle>
-                    <CardDescription className="text-sm text-muted-foreground">{doc.client} · {doc.id}</CardDescription>
+                    <CardDescription className="text-sm text-muted-foreground">
+                      <div className="font-mono text-xs text-muted-foreground">{doc.id}</div>
+                      <div>{doc.client} · {doc.clientId}</div>
+                    </CardDescription>
                   </div>
                   <div className="text-right">
                     <Badge variant={doc.status === 'Open' ? 'destructive' : 'secondary'}>{doc.status}</Badge>
