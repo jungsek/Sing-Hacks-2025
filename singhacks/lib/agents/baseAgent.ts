@@ -15,16 +15,16 @@ type StoredChunk = {
 
 const documentChunks = new Map<string, StoredChunk[]>();
 
-const ingestDocumentTool = tool({
-  name: "ingest_document",
-  description:
-    "Parse a provided document into smaller chunks using LlamaIndex so you can reference it later. Use when the user supplies long text that should inform future answers.",
-  schema: z.object({
-    documentId: z.string().describe("Stable identifier for the document, e.g., a filename."),
-    title: z.string().optional().describe("Optional short title describing the document."),
-    content: z.string().min(10).describe("Full plaintext content to break down and store."),
-  }),
-  async func({ documentId, content, title }) {
+const ingestDocumentSchema = z.object({
+  documentId: z.string().describe("Stable identifier for the document, e.g., a filename."),
+  title: z.string().optional().describe("Optional short title describing the document."),
+  content: z.string().min(10).describe("Full plaintext content to break down and store."),
+});
+
+type IngestDocumentInput = z.infer<typeof ingestDocumentSchema>;
+
+const ingestDocumentTool = tool(
+  async ({ documentId, content, title }: IngestDocumentInput) => {
     const parser = new SimpleNodeParser();
     const nodes = await parser.getNodesFromDocuments([
       new Document({
@@ -54,23 +54,29 @@ const ingestDocumentTool = tool({
       })),
     };
   },
+  {
+    name: "ingest_document",
+    description:
+      "Parse a provided document into smaller chunks using LlamaIndex so you can reference it later. Use when the user supplies long text that should inform future answers.",
+    schema: ingestDocumentSchema,
+  },
+);
+
+const queryDocumentSchema = z.object({
+  query: z.string().describe("Natural language question or keyword search."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(8)
+    .default(4)
+    .describe("Maximum number of snippets to return."),
 });
 
-const queryDocumentTool = tool({
-  name: "search_ingested_documents",
-  description:
-    "Search across the text that was previously ingested from LlamaIndex. Returns the most relevant snippets to ground your answer.",
-  schema: z.object({
-    query: z.string().describe("Natural language question or keyword search."),
-    limit: z
-      .number()
-      .int()
-      .min(1)
-      .max(8)
-      .default(4)
-      .describe("Maximum number of snippets to return."),
-  }),
-  async func({ query, limit }) {
+type QueryDocumentInput = z.infer<typeof queryDocumentSchema>;
+
+const queryDocumentTool = tool(
+  async ({ query, limit }: QueryDocumentInput) => {
     const normalized = query.toLowerCase();
 
     const results: Array<{
@@ -104,7 +110,13 @@ const queryDocumentTool = tool({
       text: result.text.slice(0, 500),
     }));
   },
-});
+  {
+    name: "search_ingested_documents",
+    description:
+      "Search across the text that was previously ingested from LlamaIndex. Returns the most relevant snippets to ground your answer.",
+    schema: queryDocumentSchema,
+  },
+);
 
 const tavilySearch = new TavilySearchResults({
   maxResults: 5,

@@ -29,15 +29,29 @@ export const Tool = ({ className, ...props }: ToolProps) => (
   />
 );
 
+/**
+ * The AI lib doesn't (yet) declare these approval states,
+ * but we want to support them in the UI.
+ */
+type ExtraToolState =
+  | "approval-requested"
+  | "approval-responded"
+  | "output-denied";
+
+/**
+ * Real state we will handle in this component.
+ */
+type ToolState = ToolUIPart["state"] | ExtraToolState;
+
 export type ToolHeaderProps = {
   title?: string;
   type: ToolUIPart["type"];
-  state: ToolUIPart["state"];
+  state: ToolState;
   className?: string;
 };
 
-const getStatusBadge = (status: ToolUIPart["state"]) => {
-  const labels: Record<ToolUIPart["state"], string> = {
+const getStatusBadge = (status: ToolState) => {
+  const labels: Record<ToolState, string> = {
     "input-streaming": "Pending",
     "input-available": "Running",
     "approval-requested": "Awaiting Approval",
@@ -47,7 +61,7 @@ const getStatusBadge = (status: ToolUIPart["state"]) => {
     "output-denied": "Denied",
   };
 
-  const icons: Record<ToolUIPart["state"], ReactNode> = {
+  const icons: Record<ToolState, ReactNode> = {
     "input-streaming": <CircleIcon className="size-4" />,
     "input-available": <ClockIcon className="size-4 animate-pulse" />,
     "approval-requested": <ClockIcon className="size-4 text-yellow-600" />,
@@ -74,7 +88,8 @@ export const ToolHeader = ({
 }: ToolHeaderProps) => (
   <CollapsibleTrigger
     className={cn(
-      "flex w-full items-center justify-between gap-4 p-3",
+      // added `group` so the chevron rotation works
+      "group flex w-full items-center justify-between gap-4 p-3",
       className
     )}
     {...props}

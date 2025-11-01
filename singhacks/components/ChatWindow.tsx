@@ -43,6 +43,13 @@ const toRequestMessages = (messages: ChatWindowMessage[]) =>
 
 type AssistantApiMessage = { role: string; content: unknown };
 
+const isTextChunk = (value: unknown): value is { text: string } => (
+  typeof value === "object" &&
+  value !== null &&
+  "text" in value &&
+  typeof (value as { text?: unknown }).text === "string"
+);
+
 const mapResponseMessages = (messages: AssistantApiMessage[] | undefined) =>
   (messages ?? [])
     .filter((message) => message?.role && message?.content != null)
@@ -55,18 +62,13 @@ const mapResponseMessages = (messages: AssistantApiMessage[] | undefined) =>
         content = message.content
           .map((part: unknown) => {
             if (typeof part === "string") return part;
-            if (
-              typeof part === "object" &&
-              part !== null &&
-              "text" in part &&
-              typeof (part as { text?: unknown }).text === "string"
-            ) {
-              return (part as { text: string }).text;
+            if (isTextChunk(part)) {
+              return part.text;
             }
             return typeof part === "object" ? JSON.stringify(part) : "";
           })
           .join("");
-      } else if (message.content?.text) {
+      } else if (isTextChunk(message.content)) {
         content = message.content.text;
       } else {
         content = JSON.stringify(message.content);
