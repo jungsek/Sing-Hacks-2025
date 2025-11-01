@@ -15,6 +15,12 @@ LangGraph-powered multi-agent workflow, a Next.js App Router frontend, and Supab
 
 ---
 
+- https://ui.shadcn.com/docs/directory
+- https://ui.aceternity.com/components
+- https://github.com/langchain-ai/langgraphjs
+- https://supabase.com/dashboard/project/unueczyhgdhhbpfjatxz/settings/general
+-
+
 ## Onboarding
 
 1. **Prerequisites**
@@ -62,6 +68,8 @@ NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-or-anon-key
 SUPABASE_SERVICE_ROLE_KEY=service-role-key-for-server-only-usage
 GROQ_API_KEY=groq-key-for-langgraph-llm-calls
+GROQ_MODEL=llama3-70b-8192
+TAVILY_API_KEY=tavily-search-key
 OPENAI_API_KEY=optional-openai-fallback
 ```
 
@@ -75,7 +83,7 @@ OPENAI_API_KEY=optional-openai-fallback
 - **UI**: Tailwind CSS with shadcn/ui primitives. For any new UI, compose shadcn/ui components and the shared `components/ai-elements` patterns to maintain consistency.
 - **State & streaming**: Vercel AI SDK (`ai` package) to stream agent steps/results to the UI.
 - **Supabase**: Auth, Postgres, optional pgvector. Use `lib/supabase` helpers for SSR-safe clients and cookie management.
-- **AI orchestration**: LangGraph + LangChain running inside route handlers (`/api/screen`, `/api/ingest`, `/api/chat`). Groq models are the default; build fallbacks behind feature flags.
+- **AI orchestration**: LangGraph + LangChain running inside route handlers (`/api/langgraph`, `/api/screen`, `/api/ingest`, `/api/chat`). Groq models are the default; build fallbacks behind feature flags.
 - **Data flow**: Form submission -> route handler -> LangGraph run -> streamed updates -> persistence of clients/reports/agent_runs in Supabase -> final risk report rendered.
 - **Deployment**: Vercel for frontend/serverless runtime, Supabase cloud for data. Edge runtime preferred where dependencies allow; fall back to Node when SDKs require it.
 
