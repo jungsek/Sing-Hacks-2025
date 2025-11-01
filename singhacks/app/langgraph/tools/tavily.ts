@@ -94,12 +94,21 @@ async function tavilyRequest<T>(endpoint: string, body: Record<string, unknown>)
 }
 
 export async function tavilySearch(params: TavilySearchParams): Promise<TavilySearchResult> {
+  const normalizeDate = (d?: string) => {
+    if (!d) return undefined;
+    const ms = Date.parse(d);
+    if (!Number.isNaN(ms)) {
+      return new Date(ms).toISOString().slice(0, 10);
+    }
+    return d.slice(0, 10);
+  };
+
   const body = {
     query: params.query,
     include_domains: params.include_domains,
     exclude_domains: params.exclude_domains,
-    start_date: params.start_date,
-    end_date: params.end_date,
+    start_date: normalizeDate(params.start_date),
+    end_date: normalizeDate(params.end_date),
     topic: params.topic ?? "news",
     search_depth: params.search_depth ?? "advanced",
     max_results: params.max_results ?? 8,
@@ -124,4 +133,3 @@ export async function tavilyExtract(params: TavilyExtractParams): Promise<Tavily
 }
 
 export { TavilyConfigError };
-

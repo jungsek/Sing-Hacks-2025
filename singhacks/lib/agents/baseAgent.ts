@@ -4,7 +4,7 @@ import { TavilySearchResults } from "@langchain/community/tools/tavily_search";
 import { tool } from "@langchain/core/tools";
 import { SystemMessage } from "@langchain/core/messages";
 import { z } from "zod";
-import { Document, SimpleNodeParser } from "llamaindex";
+import { nanoid } from "nanoid";
 
 type StoredChunk = {
   id: string;
@@ -25,20 +25,40 @@ type IngestDocumentInput = z.infer<typeof ingestDocumentSchema>;
 
 const ingestDocumentTool = tool(
   async ({ documentId, content, title }: IngestDocumentInput) => {
-    const parser = new SimpleNodeParser();
-    const nodes = await parser.getNodesFromDocuments([
-      new Document({
-        id_: documentId,
-        text: content,
-        metadata: title ? { title } : {},
-      }),
-    ]);
+    const chunkSize = 800;
+    const overlap = 80;
 
-    const chunks: StoredChunk[] = nodes.map((node) => ({
-      id: node.id_,
+    const splitIntoChunks = (text: string): string[] => {
+      const parts: string[] = [];
+      // Prefer paragraph boundaries first
+      const paragraphs = text
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0);
+
+      for (const para of paragraphs) {
+        if (para.length <= chunkSize) {
+          parts.push(para);
+          continue;
+        }
+        let start = 0;
+        while (start < para.length) {
+          const end = Math.min(start + chunkSize, para.length);
+          parts.push(para.slice(start, end));
+          if (end === para.length) break;
+          start = Math.max(0, end - overlap);
+        }
+      }
+
+      return parts;
+    };
+
+    const texts = splitIntoChunks(content);
+    const chunks: StoredChunk[] = texts.map((text) => ({
+      id: `${documentId}-${nanoid(6)}`,
       documentId,
-      text: node.getContent(),
-      length: node.getContent().length,
+      text,
+      length: text.length,
     }));
 
     documentChunks.set(documentId, chunks);

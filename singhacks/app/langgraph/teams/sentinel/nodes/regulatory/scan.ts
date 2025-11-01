@@ -6,14 +6,10 @@ import {
   fetchMasPortalListing,
 } from "@/app/langgraph/tools/masPortal";
 
-import {
-  MAX_PORTAL_PAGES,
-  MAX_RESULTS_PER_QUERY,
-  REGULATOR_CONFIGS,
-} from "./constants";
+import { MAX_PORTAL_PAGES, MAX_RESULTS_PER_QUERY, REGULATOR_CONFIGS } from "./constants";
 import { emitEvent, recordAgentRun } from "./events";
 import type { RegulatorConfig, RegulatoryNodeContext } from "./types";
-import { dedupeByUrl, getLookbackCursor, makeSnippet, mergeByUrl } from "./utils";
+import { dedupeByUrl, getLookbackCursor, makeSnippet, mergeByUrl, toDateOnly } from "./utils";
 
 export async function runRegulatoryScan(
   existingCandidates: RegulatoryCandidate[],
@@ -160,7 +156,7 @@ export async function runRegulatoryScan(
           query,
           include_domains: config.includeDomains,
           topic: "news",
-          start_date: startDate,
+          start_date: toDateOnly(startDate),
           max_results: MAX_RESULTS_PER_QUERY,
           filter_duplicates: true,
         });
@@ -214,7 +210,7 @@ export async function runRegulatoryScan(
   );
   const combinedCandidates = mergeByUrl(existingCandidates, deduped);
 
-  const cursorValue = new Date().toISOString();
+  const cursorValue = toDateOnly(new Date());
   const regulatorSummary =
     activeConfigs.length <= 3
       ? activeConfigs.map((config) => config.regulator).join(", ")
@@ -247,4 +243,3 @@ export async function runRegulatoryScan(
     cursor: cursorValue,
   };
 }
-

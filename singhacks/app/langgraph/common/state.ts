@@ -28,6 +28,8 @@ export type RegulatoryCandidate = {
   source_hash?: string;
   listing_topic?: string;
   listing_content_type?: string;
+  // Optional bag for provider-specific or scan-time details
+  metadata?: SerializableRecord;
 };
 
 export type RegulatoryDocument = {
@@ -99,4 +101,3 @@ export type SentinelState = {
 
 // Reserved for future use
 export type SupervisorState = Record<string, never>;
-

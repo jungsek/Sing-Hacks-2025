@@ -16,20 +16,22 @@ export async function upsertRegulatoryDocument(
 ): Promise<RegulatoryDocumentInsert | null> {
   try {
     const supabase = await createClient();
+    // Build row without undefined fields to avoid schema issues when optional columns are missing
+    const row: Record<string, unknown> = {
+      id: input.id,
+      type: input.type,
+      title: input.title,
+      url: input.url,
+      published_at: input.published_at,
+      meta: input.meta,
+    };
+    if (typeof input.domain === "string") {
+      row.domain = input.domain;
+    }
+
     const { data, error } = await supabase
       .from("documents")
-      .upsert(
-        {
-          id: input.id,
-          type: input.type,
-          title: input.title,
-          url: input.url,
-          domain: input.domain,
-          published_at: input.published_at,
-          meta: input.meta,
-        },
-        { onConflict: "url" },
-      )
+      .upsert(row, { onConflict: "url" })
       .select("*")
       .maybeSingle<RegulatoryDocumentInsert>();
 

@@ -111,7 +111,8 @@ export async function persistRegulatoryDocuments(
       regulator: doc.regulator,
       published_at: doc.published_at,
       stored_at: existing?.stored_at ?? now,
-      source: doc.meta?.source,
+      // Ensure `source` is a string; otherwise leave undefined to satisfy typing
+      source: typeof doc.meta?.source === "string" ? doc.meta.source : undefined,
       content_path: relativePath,
       metadata: doc.meta ?? undefined,
     });
@@ -138,4 +139,3 @@ export async function persistRegulatoryDocuments(
     manifest: limited,
   };
 }
-

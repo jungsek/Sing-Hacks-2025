@@ -8,11 +8,18 @@ import type {
 
 import { CRITERIA_KEYWORDS, DEFAULT_LOOKBACK_DAYS } from "./constants";
 
+// Return a date-only string (YYYY-MM-DD) acceptable by Tavily API
+export function toDateOnly(input: Date | string): string {
+  const d = input instanceof Date ? input : new Date(input);
+  if (Number.isNaN(d.getTime())) return String(input).slice(0, 10);
+  return d.toISOString().slice(0, 10);
+}
+
 export function getLookbackCursor(current?: string): string {
-  if (current) return current;
+  if (current) return toDateOnly(current);
   const now = new Date();
   now.setDate(now.getDate() - DEFAULT_LOOKBACK_DAYS);
-  return now.toISOString();
+  return toDateOnly(now);
 }
 
 export function dedupeByUrl<T extends { url: string }>(items: T[]): T[] {

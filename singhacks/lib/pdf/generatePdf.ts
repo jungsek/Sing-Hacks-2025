@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import type { ReactElement, JSXElementConstructor } from "react";
 
 export type PdfFont = { name: string; path: string };
 
@@ -40,7 +40,9 @@ const toBufferChunk = (chunk: unknown): Buffer => {
 
 const isAsyncIterable = (value: unknown): value is AsyncIterable<unknown> => {
   if (!value) return false;
-  return typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function";
+  return (
+    typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function"
+  );
 };
 
 const isNodeReadable = (value: unknown): value is NodeJS.ReadableStream => {
@@ -79,7 +81,6 @@ async function collectFromWebStream(stream: ReadableStream<Uint8Array>): Promise
   const reader = stream.getReader();
   const parts: Uint8Array[] = [];
 
-   
   while (true) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -134,7 +135,7 @@ async function normalisePdfOutput(output: unknown): Promise<Buffer> {
  * function throws a helpful error instructing how to add it.
  */
 export async function generatePdf(
-  doc: ReactElement,
+  doc: ReactElement<any, string | JSXElementConstructor<any>>,
   options: PdfOptions = {},
 ): Promise<Buffer> {
   try {

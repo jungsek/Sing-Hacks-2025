@@ -111,7 +111,8 @@ async function bootstrapListingSession(
   let cookieHeader: string | undefined;
 
   const rawAccessor = response.headers as unknown as RawHeaderAccessor;
-  const rawCookies = typeof rawAccessor.raw === "function" ? rawAccessor.raw()?.["set-cookie"] ?? [] : [];
+  const rawCookies =
+    typeof rawAccessor.raw === "function" ? (rawAccessor.raw()?.["set-cookie"] ?? []) : [];
   const fallbackCookie = response.headers.get("set-cookie");
   const cookies = rawCookies.length > 0 ? rawCookies : fallbackCookie ? [fallbackCookie] : [];
   if (cookies.length > 0) {
@@ -175,7 +176,10 @@ function parseListingHtml(html: string, params: MasPortalListingParams): MasPort
   return cards;
 }
 
-function parseListingJson(payload: unknown, params: MasPortalListingParams): MasPortalListingCard[] {
+function parseListingJson(
+  payload: unknown,
+  params: MasPortalListingParams,
+): MasPortalListingCard[] {
   if (!payload || typeof payload !== "object") return [];
 
   const record = payload as Record<string, unknown> & {
@@ -202,10 +206,12 @@ function parseListingJson(payload: unknown, params: MasPortalListingParams): Mas
       if (!href) return null;
 
       const title = (item["title"] ?? item["name"] ?? item["heading"]) as string | undefined;
-      const summary =
-        (item["summary"] ?? item["description"] ?? item["snippet"]) as string | undefined;
-      const published =
-        (item["published_at"] ?? item["publishDate"] ?? item["date"]) as string | undefined;
+      const summary = (item["summary"] ?? item["description"] ?? item["snippet"]) as
+        | string
+        | undefined;
+      const published = (item["published_at"] ?? item["publishDate"] ?? item["date"]) as
+        | string
+        | undefined;
 
       const card: MasPortalListingCard = {
         url: href,
@@ -219,7 +225,8 @@ function parseListingJson(payload: unknown, params: MasPortalListingParams): Mas
           page: params.page ?? 1,
           listing_topic: params.topic,
           listing_content_type: params.contentType,
-          raw: item,
+          // Ensure raw is JSON-serializable by round-tripping unknown values
+          raw: JSON.parse(JSON.stringify(item)),
         },
       };
 

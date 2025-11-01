@@ -4,12 +4,18 @@
   RegulatorySnippet,
 } from "@/app/langgraph/common/state";
 import { tavilyExtract } from "@/app/langgraph/tools/tavily";
-import { fetchMasPortalDetail, resolveMasPdfLinks } from "@/app/langgraph/tools/masPortal";
+import {
+  fetchMasPortalDetail,
+  resolveMasPdfLinks,
+  MAS_PORTAL_HTML_HEADERS,
+} from "@/app/langgraph/tools/masPortal";
 
 import { MAS_PDF_HEADERS, MAX_EXTRACT_URLS } from "./constants";
 import { emitEvent, recordAgentRun } from "./events";
 import type { RegulatoryNodeContext } from "./types";
 import { detectContentType, makeSnippet, mergeByUrl } from "./utils";
+import { load as loadHtml } from "cheerio";
+import { upsertRegulatorySource } from "@/lib/supabase/dao/regulatorySources";
 
 // Lazy loader for pdf-parse core to prevent evaluation of package index debug code
 type PdfParseFn = typeof import("pdf-parse").default;
@@ -219,7 +225,143 @@ export async function runRegulatoryExtract(
     newDocuments.push(document);
   }
 
+  // Fallback extraction: for any URLs we attempted but didn't get content for,
+  // try direct fetch + simple HTML/PDF parsing.
+  if (urls.length > 0) {
+    const produced = new Set(newDocuments.map((d) => d.url));
+    const fallbackTargets = urls.filter((u) => !produced.has(u)).slice(0, 8);
+
+    let fallbackSuccess = 0;
+    for (const url of fallbackTargets) {
+      try {
+        const type = detectContentType(url);
+        if (type === "pdf") {
+          const pdfResponse = await fetch(url, { headers: MAS_PDF_HEADERS });
+          if (!pdfResponse.ok) throw new Error(`status ${pdfResponse.status}`);
+          const ab = await pdfResponse.arrayBuffer();
+          const buf = Buffer.from(ab);
+          const _pdfParse = await loadPdfParse();
+          const parsed = await _pdfParse(buf);
+          const text = parsed?.text?.trim();
+          if (!text || text.length < 200) continue;
+          const document: RegulatoryDocument = {
+            url,
+            title: candidateMap.get(url)?.title ?? url,
+            content: text,
+            content_type: "pdf",
+            extracted_at: new Date().toISOString(),
+            regulator: candidateMap.get(url)?.regulator,
+            published_at: candidateMap.get(url)?.published_at,
+            tags: candidateMap.get(url)?.regulator
+              ? ["regulatory", String(candidateMap.get(url)?.regulator).toLowerCase()]
+              : ["regulatory"],
+            meta: {
+              source: "direct_pdf",
+              query: candidateMap.get(url)?.query,
+              summary: candidateMap.get(url)?.summary,
+              listing_topic: candidateMap.get(url)?.listing_topic,
+              listing_content_type: candidateMap.get(url)?.listing_content_type,
+              portal: candidateMap.get(url)?.metadata,
+              source_hash: candidateMap.get(url)?.source_hash,
+            },
+          };
+          newDocuments.push(document);
+          fallbackSuccess += 1;
+        } else {
+          const res = await fetch(url, { headers: MAS_PORTAL_HTML_HEADERS });
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          const html = await res.text();
+          const $ = loadHtml(html);
+          let text = $("article, main").text().trim();
+          if (!text || text.length < 200) {
+            text = $("p")
+              .map((_, el) => $(el).text().trim())
+              .get()
+              .join("\n\n")
+              .trim();
+          }
+          text = text.replace(/\s+/g, " ").trim();
+          if (!text || text.length < 300) continue;
+          const document: RegulatoryDocument = {
+            url,
+            title: (candidateMap.get(url)?.title ?? $("title").first().text().trim()) || url,
+            content: text.slice(0, 200_000),
+            content_type: "html",
+            extracted_at: new Date().toISOString(),
+            regulator: candidateMap.get(url)?.regulator,
+            published_at: candidateMap.get(url)?.published_at,
+            tags: candidateMap.get(url)?.regulator
+              ? ["regulatory", String(candidateMap.get(url)?.regulator).toLowerCase()]
+              : ["regulatory"],
+            meta: {
+              source: "html_fetch",
+              query: candidateMap.get(url)?.query,
+              summary: candidateMap.get(url)?.summary,
+              listing_topic: candidateMap.get(url)?.listing_topic,
+              listing_content_type: candidateMap.get(url)?.listing_content_type,
+              portal: candidateMap.get(url)?.metadata,
+              source_hash: candidateMap.get(url)?.source_hash,
+            },
+          };
+          newDocuments.push(document);
+          fallbackSuccess += 1;
+        }
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error ?? "");
+        snippets.push(
+          makeSnippet(
+            `reg_extract_fallback_error_${Date.now()}`,
+            `Fallback extract failed for ${url}: ${message}`,
+            url,
+            "warning",
+          ),
+        );
+      }
+    }
+
+    if (fallbackSuccess > 0) {
+      snippets.push(
+        makeSnippet(
+          `reg_extract_fallback_${Date.now()}`,
+          `Fallback extractor captured ${fallbackSuccess} document${fallbackSuccess === 1 ? "" : "s"}.`,
+          undefined,
+          "success",
+        ),
+      );
+    }
+  }
+
   const combinedDocuments = mergeByUrl(existingDocuments, newDocuments);
+
+  // Persist combinedDocuments to regulatory_sources table
+  let persistedCount = 0;
+  for (const doc of combinedDocuments) {
+    const saved = await upsertRegulatorySource({
+      regulator_name: doc.regulator ?? "Unknown",
+      title: doc.title ?? doc.url,
+      description:
+        (doc.meta?.summary as string) ??
+        (typeof doc.content === "string" && doc.content.trim().length > 0
+          ? doc.content.slice(0, 300)
+          : undefined),
+      policy_url: doc.url,
+      regulatory_document_file: undefined,
+      published_date: (doc.published_at ?? "").slice(0, 10) || undefined,
+      last_updated_date: new Date().toISOString(),
+    });
+    if (saved) persistedCount += 1;
+  }
+
+  if (persistedCount > 0) {
+    snippets.push(
+      makeSnippet(
+        `reg_sources_persist_${Date.now()}`,
+        `Persisted ${persistedCount} regulatory source${persistedCount === 1 ? "" : "s"} to the database.`,
+        undefined,
+        "success",
+      ),
+    );
+  }
 
   snippets.push(
     makeSnippet(
