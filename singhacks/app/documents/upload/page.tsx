@@ -43,6 +43,8 @@ function getFriendlyType(file: File) {
 
 export default function UploadDocumentPage() {
   const [clientName, setClientName] = useState("");
+  // clientId stores only the 8 digits entered by the user (no prefix). When sending to the server
+  // we will prepend the permanent "CL-" prefix.
   const [clientId, setClientId] = useState("");
 
   type FileStatus = 'pending' | 'uploading' | 'uploaded' | 'error';
@@ -59,11 +61,12 @@ export default function UploadDocumentPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // Validate required fields: clientName, clientId, and at least one selected file.
-    const missing: string[] = [];
-    if (!clientName || clientName.trim() === "") missing.push('Client name');
-    if (!clientId || clientId.trim() === "") missing.push('Client ID');
-    if (!filesWithStatus || filesWithStatus.length === 0) missing.push('File');
+  // Validate required fields: clientName, clientId (exactly 8 digits), and at least one selected file.
+  const missing: string[] = [];
+  if (!clientName || clientName.trim() === "") missing.push('Client name');
+  // clientId should be exactly 8 digits (we store digits only in state)
+  if (!clientId || clientId.trim().length !== 8 || /\D/.test(clientId)) missing.push('Client ID (must be 8 digits)');
+  if (!filesWithStatus || filesWithStatus.length === 0) missing.push('File');
 
     if (missing.length > 0) {
       setUploadError(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} required`);
@@ -86,10 +89,11 @@ export default function UploadDocumentPage() {
       setFilesWithStatus([...updated]);
 
       try {
-        const formData = new FormData();
-        formData.append('file', item.file);
-        formData.append('clientName', clientName);
-        formData.append('clientId', clientId);
+  const formData = new FormData();
+  formData.append('file', item.file);
+  formData.append('clientName', clientName);
+  // prepend permanent prefix with no spaces
+  formData.append('clientId', `CL-${clientId}`);
 
         const res = await fetch('/api/documents/upload', {
           method: 'POST',
@@ -128,7 +132,7 @@ export default function UploadDocumentPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             clientName,
-            clientId,
+            clientId: `CL-${clientId}`,
             documentId: firstDocumentId,
             files: results,
           }),
@@ -271,7 +275,30 @@ export default function UploadDocumentPage() {
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-1">Client ID</p>
-                  <Input value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Client ID" />
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-3 py-2 rounded-l-md border bg-gray-50 text-sm text-gray-700 font-bold">CL-</span>
+                    <input
+                      // value kept as digits only (max 8)
+                      value={clientId}
+                      onChange={(e) => {
+                        const digits = (e.target as HTMLInputElement).value.replace(/\D/g, '').slice(0, 8);
+                        setClientId(digits);
+                      }}
+                      onPaste={(e) => {
+                        // ensure pasted content is cleaned to digits only
+                        e.preventDefault();
+                        const paste = (e.clipboardData || (window as any).clipboardData).getData('text') || '';
+                        const digits = paste.replace(/\D/g, '').slice(0, 8);
+                        setClientId(digits);
+                      }}
+                      placeholder="XXXXXXXX"
+                      inputMode="numeric"
+                      aria-label="Client ID digits (8 digits)"
+                      maxLength={8}
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-base shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 md:text-sm"
+                    />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Enter 8 digits.</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium mb-1">Files</p>
@@ -344,7 +371,24 @@ export default function UploadDocumentPage() {
 
                 <div className="flex gap-2">
                   <Button type="submit" disabled={submitting || submitted}>{submitting ? 'Submitting...' : submitted ? 'Submitted' : 'Submit'}</Button>
-                  <Button variant="ghost" type="button" onClick={() => { setClientName(''); setClientId(''); setFile(null); setFilesWithStatus(undefined); setUploadError(null); }}>Clear</Button>
+                  <Button
+                    variant="ghost"
+                    type="button"
+                    onClick={() => {
+                      // Reset all form-related state so the page returns to its initial state
+                      setClientName('');
+                      setClientId('');
+                      setFile(null);
+                      setFilesWithStatus(undefined);
+                      setUploadError(null);
+                      setUploadResult(null);
+                      setSubmitting(false);
+                      setSubmitted(false);
+                      setShowSuccess(false);
+                    }}
+                  >
+                    Clear
+                  </Button>
                 </div>
               </form>
             </CardContent>
