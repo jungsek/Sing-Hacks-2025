@@ -7,9 +7,11 @@ export type RegulatorySourceRow = {
   description?: string | null;
   policy_url: string;
   regulatory_document_file?: string | null; // URL or storage path
+  domain?: string | null;         
   published_date?: string | null; // YYYY-MM-DD
   last_updated_date?: string | null; // ISO string
 };
+
 
 export async function upsertRegulatorySource(
   input: RegulatorySourceRow,
@@ -26,6 +28,7 @@ export async function upsertRegulatorySource(
           description: input.description ?? null,
           policy_url: input.policy_url,
           regulatory_document_file: input.regulatory_document_file ?? null,
+          domain: input.domain ?? null,
           published_date: input.published_date ?? null,
           last_updated_date: input.last_updated_date ?? new Date().toISOString(),
         },

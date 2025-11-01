@@ -123,7 +123,7 @@ export default function RegulatorySourcesPage() {
       const { data, error: srcError } = await supabase
         .from("regulatory_sources")
         .select(
-          "id, regulator_name, title, description, policy_url, regulatory_document_file, published_date, last_updated_date",
+        "id, regulator_name, title, description, policy_url, regulatory_document_file, published_date, last_updated_date",
         )
         .order("last_updated_date", { ascending: false })
         .limit(50);

@@ -272,6 +272,8 @@ export async function runRegulatoryExtract(
           if (!res.ok) throw new Error(`status ${res.status}`);
           const html = await res.text();
           const $ = loadHtml(html);
+
+          // Extract main text from article or paragraphs
           let text = $("article, main").text().trim();
           if (!text || text.length < 200) {
             text = $("p")
@@ -282,6 +284,16 @@ export async function runRegulatoryExtract(
           }
           text = text.replace(/\s+/g, " ").trim();
           if (!text || text.length < 300) continue;
+
+          // 👇 NEW: find the first <a href="...pdf"> link
+          let pdfUrl: string | null = null;
+          const pdfAnchor = $('a[href$=".pdf"]').first();
+          if (pdfAnchor && pdfAnchor.attr("href")) {
+            const href = pdfAnchor.attr("href")!;
+            pdfUrl = href.startsWith("http") ? href : new URL(href, url).toString();
+          }
+
+          // Construct document
           const document: RegulatoryDocument = {
             url,
             title: (candidateMap.get(url)?.title ?? $("title").first().text().trim()) || url,
@@ -301,11 +313,14 @@ export async function runRegulatoryExtract(
               listing_content_type: candidateMap.get(url)?.listing_content_type,
               portal: candidateMap.get(url)?.metadata,
               source_hash: candidateMap.get(url)?.source_hash,
+              pdf_url: pdfUrl ?? undefined,
             },
           };
+
           newDocuments.push(document);
           fallbackSuccess += 1;
         }
+
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error ?? "");
         snippets.push(
@@ -335,23 +350,66 @@ export async function runRegulatoryExtract(
 
   // Persist combinedDocuments to regulatory_sources table
   let persistedCount = 0;
-  for (const doc of combinedDocuments) {
-    const saved = await upsertRegulatorySource({
-      regulator_name: doc.regulator ?? "Unknown",
-      title: doc.title ?? doc.url,
-      description:
-        (doc.meta?.summary as string) ??
-        (typeof doc.content === "string" && doc.content.trim().length > 0
-          ? doc.content.slice(0, 300)
-          : undefined),
-      policy_url: doc.url,
-      regulatory_document_file: undefined,
-      published_date: (doc.published_at ?? "").slice(0, 10) || undefined,
-      last_updated_date: new Date().toISOString(),
-    });
-    if (saved) persistedCount += 1;
-  }
 
+  for (const doc of combinedDocuments) {
+  // derive domain
+  const domain = (() => {
+    try {
+      return new URL(doc.url).hostname;
+    } catch {
+      return null;
+    }
+  })();
+
+  // detect whether it’s a PDF
+  const isPdf =
+    doc.content_type === "pdf" ||
+    doc.url.toLowerCase().includes(".pdf") ||
+    (doc.meta?.source === "mas_portal_pdf");
+
+  console.log(
+    "🧾 Persisting:",
+    doc.url,
+    "type:",
+    doc.content_type,
+    "meta.source:",
+    doc.meta?.source,
+    "isPdf:",
+    isPdf
+  );
+
+  const pdfFromMeta =
+  (doc.meta?.pdf_url as string | undefined) ||
+  (doc.meta?.pdf_source_url as string | undefined);
+
+  console.log(
+    "🧾 Persisting:",
+    doc.url,
+    "→ pdf:",
+    pdfFromMeta ?? (isPdf ? doc.url : null)
+  );
+
+  const saved = await upsertRegulatorySource({
+    regulator_name: doc.regulator ?? "Unknown",
+    title: doc.title ?? doc.url,
+    description:
+      (doc.meta?.summary as string) ??
+      (typeof doc.content === "string" && doc.content.trim().length > 0
+        ? doc.content.slice(0, 300)
+        : undefined),
+    policy_url: doc.url,
+    regulatory_document_file: pdfFromMeta
+  ? pdfFromMeta
+  : isPdf
+    ? doc.url
+    : null,  
+    domain: domain ?? null,                          
+    published_date: (doc.published_at ?? "").slice(0, 10) || undefined,
+    last_updated_date: new Date().toISOString(),
+  });
+
+  if (saved) persistedCount += 1;
+}
   if (persistedCount > 0) {
     snippets.push(
       makeSnippet(
