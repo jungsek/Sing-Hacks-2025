@@ -160,10 +160,6 @@ export default function DashboardPage() {
                     >
                       View all
                     </Button>
-                    <Button size="sm" className="gap-1">
-                      Run screening
-                      <ArrowUpRight className="h-3 w-3" />
-                    </Button>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
