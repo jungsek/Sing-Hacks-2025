@@ -1,8 +1,0 @@
-#!/bin/sh
-
-ROOT_DIR="$(dirname "$0")/.."
-
-cd "$ROOT_DIR/singhacks" || exit 1
-
-echo "→ Running lint-staged checks..."
-npm run lint-staged

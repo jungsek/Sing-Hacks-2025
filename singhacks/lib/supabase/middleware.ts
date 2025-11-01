@@ -28,11 +28,11 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims();
   const user = data?.claims;
 
-  const publicPaths = ["/", "/auth/login", "/dashboard", "/transactions"];
+  const publicPaths = ["/", "/auth/login", "/dashboard", "/transactions", "/regulations"];
 
   // If not logged in and trying to visit a non-public route → redirect to login
   if (!user && !publicPaths.some((path) => request.nextUrl.pathname.startsWith(path))) {
-    const url = request.nextUrl.clone();
+    const url = request.nextUrl.clone(); 
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
   }
