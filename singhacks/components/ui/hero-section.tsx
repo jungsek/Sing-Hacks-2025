@@ -1,8 +1,8 @@
 "use client";
 
 import { motion } from "motion/react";
-import Link from "next/link";
 import { useState } from "react";
+import Link from "next/link";
 import { Activity, ArrowRight, CheckCircle2, ShieldAlert } from "lucide-react";
 
 import { BackgroundBeams } from "@/components/ui/background-beams";

@@ -11,27 +11,32 @@ import {
   useContext,
 } from "react";
 
+/**
+ * We define our own approval shape instead of trying to derive it from `ToolUIPart`
+ * because the current `ai` package using doesn't expose `approval` on that type.
+ */
+type Approval = {
+  approved?: boolean;
+  reason?: string;
+} | undefined;
+
 type ConfirmationContextValue = {
-  approval: ToolUIPart["approval"];
+  approval: Approval;
   state: ToolUIPart["state"];
 };
 
-const ConfirmationContext = createContext<ConfirmationContextValue | null>(
-  null
-);
+const ConfirmationContext = createContext<ConfirmationContextValue | null>(null);
 
 const useConfirmation = () => {
-  const context = useContext(ConfirmationContext);
-
-  if (!context) {
-    throw new Error("Confirmation components must be used within Confirmation");
+  const ctx = useContext(ConfirmationContext);
+  if (!ctx) {
+    throw new Error("Confirmation components must be used within <Confirmation>");
   }
-
-  return context;
+  return ctx;
 };
 
 export type ConfirmationProps = ComponentProps<typeof Alert> & {
-  approval?: ToolUIPart["approval"];
+  approval?: Approval;
   state: ToolUIPart["state"];
 };
 
@@ -41,6 +46,7 @@ export const Confirmation = ({
   state,
   ...props
 }: ConfirmationProps) => {
+  // nothing to show if no approval or we're still in input
   if (!approval || state === "input-streaming" || state === "input-available") {
     return null;
   }
@@ -65,13 +71,18 @@ export type ConfirmationRequestProps = {
   children?: ReactNode;
 };
 
+/**
+ * Show while approval is pending:
+ * - we have an approval object
+ * - but `approved` is still undefined
+ */
 export const ConfirmationRequest = ({ children }: ConfirmationRequestProps) => {
-  const { state } = useConfirmation();
+  const { approval } = useConfirmation();
 
-  // Only show when approval is requested
-  if (state !== "approval-requested") {
-    return null;
-  }
+  const isPending =
+    approval !== undefined && typeof approval.approved === "undefined";
+
+  if (!isPending) return null;
 
   return children;
 };
@@ -85,15 +96,11 @@ export const ConfirmationAccepted = ({
 }: ConfirmationAcceptedProps) => {
   const { approval, state } = useConfirmation();
 
-  // Only show when approved and in response states
-  if (
-    !approval?.approved ||
-    (state !== "approval-responded" &&
-      state !== "output-denied" &&
-      state !== "output-available")
-  ) {
-    return null;
-  }
+  const isApproved = approval?.approved === true;
+  const isOutputState =
+    state === "output-available" || state === "output-error";
+
+  if (!isApproved || !isOutputState) return null;
 
   return children;
 };
@@ -107,31 +114,30 @@ export const ConfirmationRejected = ({
 }: ConfirmationRejectedProps) => {
   const { approval, state } = useConfirmation();
 
-  // Only show when rejected and in response states
-  if (
-    approval?.approved !== false ||
-    (state !== "approval-responded" &&
-      state !== "output-denied" &&
-      state !== "output-available")
-  ) {
-    return null;
-  }
+  const isRejected = approval?.approved === false;
+  const isOutputState =
+    state === "output-available" || state === "output-error";
+
+  if (!isRejected || !isOutputState) return null;
 
   return children;
 };
 
 export type ConfirmationActionsProps = ComponentProps<"div">;
 
+/**
+ * Show Approve / Reject only while pending.
+ */
 export const ConfirmationActions = ({
   className,
   ...props
 }: ConfirmationActionsProps) => {
-  const { state } = useConfirmation();
+  const { approval } = useConfirmation();
 
-  // Only show when approval is requested
-  if (state !== "approval-requested") {
-    return null;
-  }
+  const isPending =
+    approval !== undefined && typeof approval.approved === "undefined";
+
+  if (!isPending) return null;
 
   return (
     <div
