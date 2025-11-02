@@ -403,13 +403,13 @@ export default function UploadDocumentPage() {
                             <div className="font-medium pt-2 break-words whitespace-normal">{fws.file.name}</div>
                             <div className="text-xs text-muted-foreground">{getFriendlyType(fws.file)}</div>
                           </div>
-                          <div className="mr-3">
+                          <div className="mr-3 text-xs text-muted-foreground pt-4">
                             {fws.status === 'pending' && <span className="text-sm">Pending upload</span>}
                             {fws.status === 'uploading' && <span className="text-sm">Uploading...</span>}
                             {fws.status === 'uploaded' && <span className="text-sm text-emerald-400">Uploaded</span>}
                             {fws.status === 'error' && <span className="text-sm text-rose-500">Error: {fws.error}</span>}
                           </div>
-                          <div>
+                          <div className="pt-2">
                             <button
                               type="button"
                               aria-label={`Remove ${fws.file.name}`}

@@ -150,12 +150,12 @@ export default async function CasePage({ params }: Params) {
                         <div className="space-y-2">
                           {caseFiles.map((f: any) => (
                             <Card key={f.id} className="bg-white/60 dark:bg-slate-900/30">
-            <CardContent className="flex items-start justify-between gap-4">
-          <div className="flex-1 flex flex-col justify-center min-w-0">
-            <div className="font-medium pt-2 break-words whitespace-normal">{f.filename}</div>
-            <div className="text-xs text-muted-foreground">{f.storage_path?.split('.')?.pop() ?? 'file'}</div>
-          </div>
-                                      <div className="mr-3 text-xs text-muted-foreground">
+                                <CardContent className="flex items-start justify-between gap-4">
+                                    <div className="flex-1 flex flex-col justify-center min-w-0">
+                                        <div className="font-medium pt-2 break-words whitespace-normal">{f.filename}</div>
+                                        <div className="text-xs text-muted-foreground">{f.storage_path?.split('.')?.pop() ?? 'file'}</div>
+                                    </div>
+                                    <div className="mr-3 text-xs text-muted-foreground pt-4">
                                   {f.created_at ? new Date(f.created_at).toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }) : ''}
                                 </div>
                               </CardContent>
