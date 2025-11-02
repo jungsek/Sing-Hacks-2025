@@ -485,7 +485,7 @@ export default function UploadDocumentPage() {
                                 {getFriendlyType(fws.file)}
                               </div>
                             </div>
-                            <div className="mr-3">
+                            <div className="mr-3 pt-2">
                               {fws.status === "pending" && (
                                 <span className="text-sm">Pending upload</span>
                               )}
@@ -503,7 +503,7 @@ export default function UploadDocumentPage() {
                               <button
                                 type="button"
                                 aria-label={`Remove ${fws.file.name}`}
-                                className="flex h-8 w-8 items-center justify-center rounded-full p-1 text-xl text-gray-500 hover:text-red-600"
+                                className="flex h-8 w-8 items-center justify-center rounded-full p-1 text-xl text-gray-500 hover:text-red-600 pt-4"
                                 onClick={() => {
                                   setFilesWithStatus((prev) => prev?.filter((_, i) => i !== idx));
                                 }}
