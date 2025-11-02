@@ -1,9 +1,5 @@
-import HeroSectionOne from "@/components/ui/hero-section";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return (
-    <main className="bg-background">
-      <HeroSectionOne />
-    </main>
-  );
+  redirect("/dashboard");
 }
