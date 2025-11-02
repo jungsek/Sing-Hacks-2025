@@ -398,9 +398,9 @@ export default function UploadDocumentPage() {
                   <div className="space-y-2">
                     {filesWithStatus.map((fws, idx) => (
                       <Card key={`${fws.file.name}-${fws.file.size}`} className="bg-white/60 dark:bg-slate-900/30">
-                        <CardContent className="flex items-center justify-between gap-4">
-                          <div className="flex-1 flex flex-col justify-center">
-                            <div className="font-medium pt-2">{fws.file.name}</div>
+                        <CardContent className="flex items-start justify-between gap-4">
+                          <div className="flex-1 flex flex-col justify-center min-w-0">
+                            <div className="font-medium pt-2 break-words whitespace-normal">{fws.file.name}</div>
                             <div className="text-xs text-muted-foreground">{getFriendlyType(fws.file)}</div>
                           </div>
                           <div className="mr-3">

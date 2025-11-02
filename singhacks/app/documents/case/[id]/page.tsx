@@ -37,35 +37,49 @@ export default async function CasePage({ params }: Params) {
       } else {
         caseItem = data || null;
 
-        // If the case has a linked document_id, attempt to load the file metadata
+        // Load documents linked to this case via the join table `aml_case_documents`.
         try {
-          const docId = (caseItem && caseItem.document_id) || null;
-          if (docId) {
-            const { data: docsData, error: docsErr } = await client
-              .from("documents")
-              .select("id, filename, storage_path, created_at")
-              .eq("id", docId);
+          let docsData: any[] | null = null;
 
-            if (!docsErr && Array.isArray(docsData) && docsData.length > 0) {
-              // create signed urls for each document (1h)
-              const filesWithUrls = await Promise.all(
-                docsData.map(async (d: any) => {
-                  let signedUrl: string | null = null;
-                  try {
-                    const { data: sUrlData, error: sErr } = await client.storage
-                      .from("Files")
-                      .createSignedUrl(d.storage_path, 60 * 60);
-                    if (!sErr) signedUrl = sUrlData?.signedUrl ?? null;
-                  } catch (_) {
-                    signedUrl = null;
-                  }
+          // First, fetch linked document IDs from the join table
+          const { data: links, error: linksErr } = await client
+            .from('aml_case_documents')
+            .select('document_id')
+            .eq('aml_case_id', caseItem.id);
 
-                  return { ...d, signedUrl };
-                }),
-              );
+          if (!linksErr && Array.isArray(links) && links.length > 0) {
+            const ids = links.map((l: any) => l.document_id).filter(Boolean);
+            if (ids.length > 0) {
+              const { data: docs, error: docsErr } = await client
+                .from('documents')
+                .select('id, filename, storage_path, created_at')
+                .in('id', ids as any);
 
-              caseFiles = filesWithUrls;
+              if (!docsErr && Array.isArray(docs) && docs.length > 0) {
+                docsData = docs;
+              }
             }
+          }
+
+          if (docsData && docsData.length > 0) {
+            // create signed urls for each document (1h)
+            const filesWithUrls = await Promise.all(
+              docsData.map(async (d: any) => {
+                let signedUrl: string | null = null;
+                try {
+                  const { data: sUrlData, error: sErr } = await client.storage
+                    .from("Files")
+                    .createSignedUrl(d.storage_path, 60 * 60);
+                  if (!sErr) signedUrl = sUrlData?.signedUrl ?? null;
+                } catch (_) {
+                  signedUrl = null;
+                }
+
+                return { ...d, signedUrl };
+              }),
+            );
+
+            caseFiles = filesWithUrls;
           }
         } catch (err) {
           // non-fatal: leave caseFiles null
@@ -136,20 +150,13 @@ export default async function CasePage({ params }: Params) {
                         <div className="space-y-2">
                           {caseFiles.map((f: any) => (
                             <Card key={f.id} className="bg-white/60 dark:bg-slate-900/30">
-                              <CardContent className="flex items-center justify-between gap-4">
-                                <div className="flex-1 flex flex-col justify-center">
-                                  <div className="font-medium pt-2">{f.filename}</div>
-                                  <div className="text-xs text-muted-foreground">{f.storage_path?.split('.')?.pop() ?? 'file'}</div>
-                                </div>
-                                <div className="mr-3 text-xs text-muted-foreground">
+            <CardContent className="flex items-start justify-between gap-4">
+          <div className="flex-1 flex flex-col justify-center min-w-0">
+            <div className="font-medium pt-2 break-words whitespace-normal">{f.filename}</div>
+            <div className="text-xs text-muted-foreground">{f.storage_path?.split('.')?.pop() ?? 'file'}</div>
+          </div>
+                                      <div className="mr-3 text-xs text-muted-foreground">
                                   {f.created_at ? new Date(f.created_at).toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }) : ''}
-                                </div>
-                                <div>
-                                  {f.signedUrl ? (
-                                    <a href={f.signedUrl} target="_blank" rel="noreferrer" className="underline text-sm">Open</a>
-                                  ) : (
-                                    <span className="text-xs text-muted-foreground">No preview</span>
-                                  )}
                                 </div>
                               </CardContent>
                             </Card>
