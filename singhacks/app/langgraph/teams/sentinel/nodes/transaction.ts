@@ -60,7 +60,8 @@ const buildTransactionContext = (
     txn?.meta ?? null,
     state.transaction?.meta ?? null,
   ];
-  const meta: Record<string, unknown> = metaSources.find((m): m is SerializableRecord => !!m && typeof m === "object") ?? {};
+  const meta: Record<string, unknown> =
+    metaSources.find((m): m is SerializableRecord => !!m && typeof m === "object") ?? {};
 
   const getMetaValue = (key: string) => toPrimitive(meta[key]);
 
@@ -264,9 +265,12 @@ export async function transactionNode(state: SentinelState): Promise<Partial<Sen
   const context = buildTransactionContext(state, txn);
   const userPrompt = buildUserPrompt(context);
 
+  // Ensure we always pass a concrete model string to the LLM
+  const modelId = "openai/gpt-oss-20b";
+
   const llm = new ChatGroq({
     apiKey,
-    model: process.env.GROQ_MODEL ?? "llama3-70b-8192",
+    model: modelId,
     temperature: 0.1,
     maxTokens: 800,
   });
@@ -303,6 +307,6 @@ export async function transactionNode(state: SentinelState): Promise<Partial<Sen
     rule_hits: [...(state.rule_hits ?? []), ...ruleHits],
     score,
     transaction_analysis_origin: "llm",
-    transaction_analysis_model: process.env.GROQ_MODEL ?? "llama3-70b-8192",
+    transaction_analysis_model: modelId,
   };
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
 import "./globals.css";
+import AlertToaster from "@/components/aml/AlertToaster";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -38,6 +39,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           {children}
+          {/* Global high-severity alerts popup */}
+          <AlertToaster />
         </ThemeProvider>
       </body>
     </html>

@@ -7,9 +7,10 @@ import { JbTopbar } from "@/components/ui/jb-topbar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowUpRight, Loader2, RefreshCcw } from "lucide-react";
+import { ArrowUpRight, Loader2, RefreshCcw, ChevronsUpDown } from "lucide-react";
 import { Reasoning, ReasoningTrigger, ReasoningContent } from "@/components/ai-elements/reasoning";
 import { Task, TaskTrigger, TaskContent, TaskItem } from "@/components/ai-elements/task";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import {
   useRegulationAgentStream,
   type AgentTask,
@@ -95,6 +96,7 @@ export default function RegulatorySourcesPage() {
   } = useRegulationAgentStream();
 
   const isStreaming = agentStatus === "running";
+  const hasCompleted = agentStatus === "success";
   const reasoningText =
     reasoning.length > 0
       ? reasoning.join("\n\n")
@@ -107,6 +109,13 @@ export default function RegulatorySourcesPage() {
       : undefined;
   const errorMessage =
     [error, agentError].filter((msg): msg is string => Boolean(msg)).join(" ") || null;
+
+  // Control visibility (open/closed) of the findings section; open while streaming, close after
+  const [findingsOpen, setFindingsOpen] = useState(false);
+  useEffect(() => {
+    // Open during streaming; collapse once completed
+    setFindingsOpen(isStreaming);
+  }, [isStreaming, runId]);
 
   useEffect(() => {
     return () => {
@@ -123,7 +132,7 @@ export default function RegulatorySourcesPage() {
       const { data, error: srcError } = await supabase
         .from("regulatory_sources")
         .select(
-        "id, regulator_name, title, description, policy_url, regulatory_document_file, published_date, last_updated_date",
+          "id, regulator_name, title, description, policy_url, regulatory_document_file, published_date, last_updated_date",
         )
         .order("last_updated_date", { ascending: false })
         .limit(50);
@@ -133,7 +142,14 @@ export default function RegulatorySourcesPage() {
 
       if (!isMountedRef.current) return;
       setSources(list);
-      setLastUpdatedAt(new Date().toISOString());
+      // Compute the most recent timestamp from rows; fall back to now
+      const latest = list.reduce<string | null>((acc, cur) => {
+        const candidate = cur.last_updated_date || cur.published_date || null;
+        if (!candidate) return acc;
+        if (!acc) return candidate;
+        return new Date(candidate).getTime() > new Date(acc).getTime() ? candidate : acc;
+      }, null);
+      setLastUpdatedAt(latest ?? new Date().toISOString());
     } catch (err) {
       if (!isMountedRef.current) return;
       const message = err instanceof Error ? err.message : "Unable to load regulatory sources.";
@@ -145,7 +161,19 @@ export default function RegulatorySourcesPage() {
     }
   }, []);
 
-  // Do not auto-refresh on mount; user actions will trigger data loads
+  // Auto-load persisted sources on mount so users see data immediately
+  useEffect(() => {
+    void fetchEntries();
+  }, [fetchEntries]);
+
+  // Refresh when window regains focus, unless the agent is currently streaming
+  useEffect(() => {
+    const onFocus = () => {
+      if (!isStreaming) void fetchEntries();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [isStreaming, fetchEntries]);
 
   // When runId changes (first status event), show the new run ID
   useEffect(() => {
@@ -250,7 +278,13 @@ export default function RegulatorySourcesPage() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <Reasoning isStreaming={isStreaming} duration={durationSeconds} defaultOpen>
+                  {/* Remount on status change so defaultOpen applies when run completes */}
+                  <Reasoning
+                    key={`${runId ?? "no-run"}-${agentStatus}`}
+                    isStreaming={isStreaming}
+                    duration={durationSeconds}
+                    defaultOpen={!hasCompleted}
+                  >
                     <ReasoningTrigger />
                     <ReasoningContent>{reasoningText}</ReasoningContent>
                   </Reasoning>
@@ -258,7 +292,8 @@ export default function RegulatorySourcesPage() {
                 {tasks.length > 0 && (
                   <div className="space-y-4">
                     {tasks.map((task: AgentTask) => (
-                      <Task key={task.id} defaultOpen={task.status !== "idle"}>
+                      // Remount per status so defaultOpen reflects streaming/completed
+                      <Task key={`${task.id}-${agentStatus}`} defaultOpen={isStreaming}>
                         <TaskTrigger title={task.title} />
                         <TaskContent>
                           {task.logs.length === 0 ? (
@@ -277,55 +312,67 @@ export default function RegulatorySourcesPage() {
 
           {/* Snippets (findings) come first */}
           {agentSnippets.length > 0 && (
-            <Card className="border-border/80 bg-white/80 dark:bg-slate-900/50">
-              <CardHeader>
-                <CardTitle className="text-base font-semibold">Agent findings</CardTitle>
-                <CardDescription className="text-xs text-muted-foreground">
-                  Highlights from the most recent regulatory run.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-2 text-sm">
-                  {agentSnippets.map((snippet, index) => (
-                    <li
-                      key={`${snippet.rule_id ?? "snippet"}-${index}`}
-                      className="flex flex-col gap-1 rounded-md border border-border/50 bg-muted/30 px-3 py-2"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Badge variant={snippetBadgeVariant(snippet.level)}>
-                          {snippet.level ?? "info"}
-                        </Badge>
-                        <span className="font-medium text-foreground">{snippet.rule_id}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">{snippet.text}</p>
-                      {snippet.source_url && (
-                        <div className="flex items-center gap-3">
-                          <Button
-                            variant="link"
-                            size="sm"
-                            className="gap-1 self-start text-xs text-blue-600"
-                            onClick={() => window.open(snippet.source_url!, "_blank")}
-                          >
-                            View context
-                            <ArrowUpRight className="h-3 w-3" />
-                          </Button>
-                          {idByUrl.has(snippet.source_url) && (
-                            <Button
-                              variant="link"
-                              size="sm"
-                              className="gap-1 self-start text-xs text-blue-600"
-                              onClick={() => handleOpenSnippetSource(snippet.source_url)}
-                            >
-                              Open source card
-                            </Button>
+            <Collapsible open={findingsOpen} onOpenChange={setFindingsOpen}>
+              <Card className="border-border/80 bg-white/80 dark:bg-slate-900/50">
+                <CardHeader className="flex flex-row items-center justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base font-semibold">Agent findings</CardTitle>
+                    <CardDescription className="text-xs text-muted-foreground">
+                      Highlights from the most recent regulatory run.
+                    </CardDescription>
+                  </div>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-8 px-2 text-xs">
+                      {findingsOpen ? "Collapse" : "Expand"}
+                      <ChevronsUpDown className="ml-1 h-4 w-4" />
+                    </Button>
+                  </CollapsibleTrigger>
+                </CardHeader>
+                <CollapsibleContent>
+                  <CardContent>
+                    <ul className="space-y-2 text-sm">
+                      {agentSnippets.map((snippet, index) => (
+                        <li
+                          key={`${snippet.rule_id ?? "snippet"}-${index}`}
+                          className="flex flex-col gap-1 rounded-md border border-border/50 bg-muted/30 px-3 py-2"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Badge variant={snippetBadgeVariant(snippet.level)}>
+                              {snippet.level ?? "info"}
+                            </Badge>
+                            <span className="font-medium text-foreground">{snippet.rule_id}</span>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{snippet.text}</p>
+                          {snippet.source_url && (
+                            <div className="flex items-center gap-3">
+                              <Button
+                                variant="link"
+                                size="sm"
+                                className="gap-1 self-start text-xs text-blue-600"
+                                onClick={() => window.open(snippet.source_url!, "_blank")}
+                              >
+                                View context
+                                <ArrowUpRight className="h-3 w-3" />
+                              </Button>
+                              {idByUrl.has(snippet.source_url) && (
+                                <Button
+                                  variant="link"
+                                  size="sm"
+                                  className="gap-1 self-start text-xs text-blue-600"
+                                  onClick={() => handleOpenSnippetSource(snippet.source_url)}
+                                >
+                                  Open source card
+                                </Button>
+                              )}
+                            </div>
                           )}
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           )}
 
           {loading && sources.length === 0 ? (

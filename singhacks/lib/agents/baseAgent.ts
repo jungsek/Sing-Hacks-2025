@@ -143,9 +143,17 @@ const tavilySearch = new TavilySearchResults({
   apiKey: process.env.TAVILY_API_KEY,
 });
 
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
 const groqModel = new ChatGroq({
   apiKey: process.env.GROQ_API_KEY,
-  model: process.env.GROQ_MODEL ?? "llama3-70b-8192",
+  model: requiredEnv("GROQ_MODEL"),
   temperature: 0.2,
   maxTokens: 1024,
 });
