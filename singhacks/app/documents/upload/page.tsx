@@ -15,6 +15,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
+import AnalysisCard from "@/components/analysis/AnalysisCard";
 
 // Map MIME types or file extensions to friendly names shown in the UI.
 function getFriendlyType(file: File) {
@@ -81,10 +82,11 @@ export default function UploadDocumentPage() {
       const resp = await fetch(url);
       if (!resp.ok || !resp.body) throw new Error(`Analyze failed (${resp.status})`);
 
-      const reader = resp.body.getReader();
+  const reader = resp.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
       let gotFinalArtifact = false;
+  let finalArtifact: any = null;
 
       while (true) {
         const { value, done } = await reader.read();
@@ -124,6 +126,7 @@ export default function UploadDocumentPage() {
               }));
             } else if (eventType === "on_artifact") {
               gotFinalArtifact = true;
+              finalArtifact = payload?.data ?? null;
               setAnalysisResult((prev: any) => ({ ...(prev || {}), final: payload?.data }));
             } else if (eventType === "on_error") {
               setAnalysisResult((prev: any) => ({
@@ -140,10 +143,15 @@ export default function UploadDocumentPage() {
       // If final artifact arrived, move case to pending action (backend also updates; this ensures UI reflects)
       if (gotFinalArtifact && caseIdParam) {
         try {
+          // include analysis_report payload when updating the case so the DB stores the analysis
           const res = await fetch("/api/documents/update-case", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ caseId: caseIdParam, status: "pending action" }),
+            body: JSON.stringify({
+              caseId: caseIdParam,
+              status: "pending action",
+              analysis_report: finalArtifact ?? null,
+            }),
           });
           const data = await res.json().catch(() => ({}));
           setAnalysisResult((prev: any) => ({ ...(prev || {}), updateCase: data }));
@@ -544,53 +552,9 @@ export default function UploadDocumentPage() {
               </CardContent>
             </Card>
 
-            {/* Analysis card: appears to the right when a submission has been made */}
+            {/* Analysis card: appears to the right when a submission has been made. Use shared AnalysisCard for consistent formatting. */}
             {submitted ? (
-              <Card className="w-80 bg-white/70 dark:bg-slate-900/40">
-                <CardHeader>
-                  <CardTitle>Analysis</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {analyzing ? (
-                      <div className="flex items-center gap-3">
-                        <svg
-                          className="h-5 w-5 animate-spin text-gray-600"
-                          xmlns="http://www.w3.org/2000/svg"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          ></circle>
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
-                          ></path>
-                        </svg>
-                        <span className="text-sm font-medium">Analyzing...</span>
-                      </div>
-                    ) : analysisResult ? (
-                      <div>
-                        <div className="text-sm font-medium">Analysis complete</div>
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          {analysisResult.summary ?? JSON.stringify(analysisResult)}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-muted-foreground">
-                        Ready — analysis will start automatically after submit.
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
+              <AnalysisCard caseId={caseId} initialResult={analysisResult} />
             ) : null}
           </div>
         </main>
