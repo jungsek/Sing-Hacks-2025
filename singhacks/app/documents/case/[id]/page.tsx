@@ -4,6 +4,7 @@ import { JbTopbar } from "@/components/ui/jb-topbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Breadcrumb, BreadcrumbList, BreadcrumbItem, BreadcrumbLink, BreadcrumbPage, BreadcrumbSeparator } from "@/components/ui/breadcrumb";
 import { createClient as createServerClient } from "@/lib/supabase/server";
+import AnalysisCard from "@/components/analysis/AnalysisCard";
 
 type Params = {
   // Next may pass params as a plain object or as a Promise that resolves to the params.
@@ -155,7 +156,7 @@ export default async function CasePage({ params }: Params) {
             <div className="font-medium pt-2 break-words whitespace-normal">{f.filename}</div>
             <div className="text-xs text-muted-foreground">{f.storage_path?.split('.')?.pop() ?? 'file'}</div>
           </div>
-                                      <div className="mr-3 text-xs text-muted-foreground">
+                                      <div className="mr-3 text-xs text-muted-foreground pt-4">
                                   {f.created_at ? new Date(f.created_at).toLocaleString('en-GB', { timeZone: 'Asia/Singapore' }) : ''}
                                 </div>
                               </CardContent>
@@ -170,6 +171,12 @@ export default async function CasePage({ params }: Params) {
                 )}
               </CardContent>
             </Card>
+            {/* Analysis card: shows results fetched from the API (client-side) */}
+            {caseItem ? (
+              <div>
+                <AnalysisCard caseId={caseItem.id} />
+              </div>
+            ) : null}
           </div>
         </main>
       </div>
