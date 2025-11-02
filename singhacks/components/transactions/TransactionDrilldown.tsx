@@ -125,8 +125,8 @@ export function TransactionDrilldown({
   } = useTransactionAgentStream(transactionId);
 
   useEffect(() => {
-    runAgent();
-  }, [runAgent]);
+    if (autoRun) runAgent();
+  }, [runAgent, autoRun]);
 
   const reasoningText = useMemo(() => {
     if (reasoning.length > 0) return reasoning.join("\n\n");
@@ -251,10 +251,17 @@ export function TransactionDrilldown({
             </div>
           )}
 
-          {(analysisOrigin || analysisModel) && (
+          {(analysisOrigin ||
+            analysisModel ||
+            initial?.analysisOrigin ||
+            initial?.analysisModel) && (
             <div className="rounded-md border border-border/40 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
-              {analysisOrigin && <span className="mr-3">Origin: {analysisOrigin}</span>}
-              {analysisModel && <span>Model: {analysisModel}</span>}
+              {(analysisOrigin || initial?.analysisOrigin) && (
+                <span className="mr-3">Origin: {analysisOrigin ?? initial?.analysisOrigin}</span>
+              )}
+              {(analysisModel || initial?.analysisModel) && (
+                <span>Model: {analysisModel ?? initial?.analysisModel}</span>
+              )}
             </div>
           )}
 
@@ -382,7 +389,7 @@ export function TransactionDrilldown({
             <p className="text-sm text-muted-foreground">
               {score && score >= 0.65
                 ? "Agent did not add regulatory commentary for this run."
-                : "Regulatory enrichment triggers when the score exceeds the risk threshold."}
+                : "Cross-reference runs in the background and appears here when ready."}
             </p>
           ) : null}
 

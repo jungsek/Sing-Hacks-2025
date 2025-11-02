@@ -355,3 +355,61 @@ M4 — Polish & Hardening (0.5 day)
 - Should we generate downloadable PDF for the report in MVP or stick to JSON/HTML?
 - Which AI-generated detection provider to standardize on if keys available?
 - Storage choice for large images (DB vs Supabase Storage bucket) and retention policy.
+
+---
+
+## Addendum — Implementation blueprint integrated with repo
+
+0. Target outputs
+
+- Normalized artifacts in Supabase Storage; `documents` table holds filename and `storage_path`.
+- Final artifact streamed as `{ type: 'veritas_report', document_id, risk, markdown, json }`.
+- Audit trail in `agent_runs` via `logAgentRun` and service-role inserts for reliability.
+
+1. Ingestion & normalization
+
+- Accept PDFs in MVP. Upload via `/api/documents/upload` to `Files` bucket, path `uploads/{clientId}/{timestamp_name}`.
+- `analyze` route downloads bytes by `document_id` and parses text with `pdf-parse`.
+
+2. OCR & text QC
+
+- Deferred; current parser assumes text-bearing PDFs. Hooks exist to extend with OCR.
+
+3. Structural & formatting
+
+- MVP checks: excessive capitalization and line counts. Emits `format_findings` metrics.
+
+4. Field extraction, 5) Single-doc checks, 6) Cross-doc corroboration
+
+- Planned for post-MVP. The state and SSE affordances are in-place to add them incrementally.
+
+7. Image forensics
+
+- Placeholder node emits summary; `image_checks` DAO prepared for EXIF/ELA persistence when enabled.
+
+8. Compliance/format validation
+
+- Thin heuristics now; JSON schema alignment with UI to be added with Zod/AJV when LLM outputs are introduced.
+
+9. Risk scoring
+
+- Penalty from formatting issues; map to Low/Medium/High/Critical consistent with plan bands.
+
+10. Reporting & audit
+
+- Markdown + JSON embedded in final artifact; every event written to `agent_runs`.
+
+11. UX integration
+
+- Upload → Create Case (status=processing) → Analyze (SSE) → On artifact mark `pending action`. The Upload page now connects to SSE and reflects progress.
+
+Files added
+
+- `app/langgraph/teams/veritas/index.ts` — runner that emits SSE events.
+- `app/langgraph/tools/llamaparse.ts` — `pdf-parse` wrapper + chunk/token utils.
+- `lib/supabase/dao/imageChecks.ts` — optional persistence for future image signals.
+- `app/api/docs/analyze/route.ts` — orchestrates the Veritas run and streams events.
+
+DB/frontend stability
+
+- No schema changes. We only use existing `documents`, `agent_runs`, `aml_cases` and storage. UI consumes the standard SSE format (`common/events.ts`).

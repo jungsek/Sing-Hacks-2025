@@ -43,23 +43,48 @@ export async function POST(request: Request) {
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {});
 
-        // Try a few common column names that might reference the case id
-        const columnCandidates = ["case_id", "aml_case_id", "document_id", "caseid", "caseId"];
+        // Try to fetch documents linked via the join table `aml_case_documents` first
         let found: any[] | null = null;
+        try {
+          const { data: links, error: linksErr } = await supabase
+            .from("aml_case_documents")
+            .select("document_id")
+            .eq("aml_case_id", body.docId)
+            .limit(200);
 
-        for (const col of columnCandidates) {
-          try {
-            const { data, error } = await supabase
-              .from("documents")
-              .select("*")
-              .eq(col, body.docId)
-              .limit(200);
-            if (!error && Array.isArray(data) && data.length > 0) {
-              found = data as any[];
-              break;
+          if (!linksErr && Array.isArray(links) && links.length > 0) {
+            const ids = links.map((l: any) => l.document_id).filter(Boolean);
+            if (ids.length > 0) {
+              const { data: docs, error: docsErr } = await supabase
+                .from("documents")
+                .select("*")
+                .in("id", ids as any)
+                .limit(200 as any);
+              if (!docsErr && Array.isArray(docs) && docs.length > 0) found = docs as any[];
             }
-          } catch (e) {
-            // ignore and try next candidate
+          }
+        } catch (e) {
+          // ignore and fallback to column-based search
+        }
+
+        // If not found via join table, try a few common column names that might reference the case id
+        if (!found) {
+          const columnCandidates = ["case_id", "aml_case_id", "document_id", "caseid", "caseId"];
+
+          for (const col of columnCandidates) {
+            try {
+              const { data, error } = await supabase
+                .from("documents")
+                .select("*")
+                .eq(col, body.docId)
+                .limit(200);
+              if (!error && Array.isArray(data) && data.length > 0) {
+                found = data as any[];
+                break;
+              }
+            } catch (e) {
+              // ignore and try next candidate
+            }
           }
         }
 

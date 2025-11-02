@@ -5,22 +5,84 @@ Scope: Transaction monitoring workflow with emphasis on Level 1 data analysis. O
 
 ## Workflow levels (overview)
 
-- Level 1 — Data analysis: derive AML signals from raw transaction data.
-- Level 2 — Regulatory cross-reference: enrich with regulator guidance, snippets, and rule proposals.
-- Level 3 — Evaluate: aggregate rule hits into risk score (+ concise reasoning) and stream to UI.
-- Level 4 — Post-run collation: after 1,000 rows complete, collate high-risk, analyze patterns/schemes, produce a detailed report.
-- Level 5 — Drill-down per transaction: `/transactions/{transaction_id}` detailed insight and reasoning.
-
----
-
-## Level 1 — Transaction data analysis framework
-
-Goal: Convert row-level inputs into structured risk signals and candidate rule hits suitable for scoring.
+Level 3 — Final evaluation: aggregate L1 rule hits + L2 guidance into a final risk score with concise reasoning; streamed to drill-down UI and used for alerting.
 
 ### 1) Transactional factors (the "What")
 
-Fields: `channel`, `product_type`, `amount`, `currency`
+---
 
+## Level 2 — Regulatory cross-reference (transaction-aware)
+
+Goal: Cross-reference a single transaction against curated regulatory sources and internal rule versions to surface relevant guidance, snippets, and draft rule proposals.
+
+Data sources:
+
+- Supabase table: `regulatory_sources` (columns: regulator_name, title, description, policy_url, regulatory_document_file, domain, published_date, last_updated_date)
+- Internal artifacts: `documents`, `document_chunks`, `rule_versions`
+
+Workflow:
+
+- Query relevant regulatory sources by jurisdiction/regulator (e.g., `meta.regulator`, `booking_jurisdiction`).
+- Summarize and extract actionable monitoring criteria (e.g., Travel Rule completeness, SWIFT mandatory fields) via LLM.
+- Emit `regulatory_snippets[]` with concise citations and URLs for UI context.
+- Maintain ingestion pipeline: crawl (MAS/FINMA/HKMA), extract plaintext (HTML/PDF), generate `rule_proposals[]`, and persist `rule_versions[]` with diff/version metadata.
+
+Outputs:
+
+- `regulatory_snippets[]` — short guidance items with optional `source_url` and `level`.
+- Optional `rule_proposals[]` and `regulatory_versions[]` for governance trail.
+- Cursor (`regulatory_cursor`) to support incremental ingestion windows.
+
+Notes:
+
+- Ingestion (external crawling) runs opportunistically; cross-reference always uses the latest stored sources.
+- If LLM unavailable, return minimal snippets indicating skipped enrichment.
+
+---
+
+## Level 3 — Final evaluation and reasoning
+
+Goal: Produce the final single-transaction assessment by combining Level 1 signals (`rule_hits`, preliminary `score`) with Level 2 context (`regulatory_snippets`, versions/proposals) into a refined score and concise reasoning paragraph.
+
+Inputs:
+
+- Level 1: `rule_hits[]`, preliminary `score`, model/origin
+- Level 2: `regulatory_snippets[]` (and optionally proposals/versions)
+
+Behavior:
+
+- LLM-based aggregator computes `final_score ∈ [0,1]` (with dampening for many small hits) and returns a short rationale (<= 500 chars).
+- Fallback numeric aggregation is used if LLM is unavailable.
+- Stream an evaluation summary to the drill-down view; do not clutter the list feed.
+
+Outputs:
+
+- Updated `score` (final)
+- Reasoning text streamed as part of agent tasks for the transaction detail page
+- Used by alert node to assign severity and persist alert payload
+
+---
+
+## End-to-end flow and UX
+
+1. CSV → LangGraph agent: each row posted to `/api/aml/monitor`.
+2. Level 1 runs immediately and streams quick hits/score to the monitoring list.
+3. Level 2 (cross-reference) + Level 3 (evaluation) run automatically in the background:
+
+- Not shown in the streaming list feed
+- Fully visible in the transaction drill-down (`/transactions/{id}`) with task logs and reasoning
+
+4. Alert artifact persisted with final score, rule hits, and regulatory snippets.
+
+---
+
+## Next steps
+
+- Parameterize thresholds by `booking_jurisdiction` and `product_type`.
+- Add cross-row aggregations for velocity/structuring beyond same-day window.
+- Enrich country risk via a maintained list or data service.
+- Wire Level 4 collation pipeline after batch completion and integrate PDF report generation.
+- Add per-regulator policy packs and test fixtures to verify cross-reference mappings.
 - Question: How are funds being moved and how much?
 - High-risk indicators:
   - Cash-based transactions (e.g., `cash_deposit`) — classic placement risk.

@@ -317,6 +317,30 @@ export async function POST(req: Request) {
                 idx.str_filed_datetime >= 0 ? row[idx.str_filed_datetime] : undefined,
             };
 
+            // Build a consolidated meta snapshot for UI/feed consumption
+            const displayMeta = {
+              booking_jurisdiction: meta.booking_jurisdiction,
+              regulator: meta.regulator,
+              booking_datetime: meta.booking_datetime,
+              value_date: meta.value_date,
+              amount: Number(amountStr || 0),
+              currency,
+              channel: meta.channel,
+              product_type: meta.product_type,
+              originator_name: meta.originator_name,
+              originator_country: meta.originator_country,
+              beneficiary_name: meta.beneficiary_name,
+              beneficiary_country: meta.beneficiary_country,
+              travel_rule_complete: meta.travel_rule_complete,
+              sanctions_screening: meta.sanctions_screening,
+              customer_risk_rating: meta.customer_risk_rating,
+              customer_is_pep: meta.customer_is_pep,
+              kyc_last_completed: meta.kyc_last_completed,
+              kyc_due_date: meta.kyc_due_date,
+              edd_required: meta.edd_required,
+              edd_performed: meta.edd_performed,
+            } as const;
+
             await write({
               type: "on_tool_call",
               payload: {
@@ -328,20 +352,7 @@ export async function POST(req: Request) {
                   type: "csv_row",
                   index: i,
                   transaction_id: txnId,
-                  meta: {
-                    booking_jurisdiction: meta.booking_jurisdiction,
-                    regulator: meta.regulator,
-                    booking_datetime: meta.booking_datetime,
-                    amount: Number(amountStr || 0),
-                    currency,
-                    originator_name: meta.originator_name,
-                    originator_country: meta.originator_country,
-                    beneficiary_name: meta.beneficiary_name,
-                    beneficiary_country: meta.beneficiary_country,
-                    travel_rule_complete: meta.travel_rule_complete,
-                    sanctions_screening: meta.sanctions_screening,
-                    customer_risk_rating: meta.customer_risk_rating,
-                  },
+                  meta: displayMeta,
                 },
               },
             });
@@ -350,20 +361,7 @@ export async function POST(req: Request) {
                 run_id: runId,
                 index: i,
                 transaction_id: txnId,
-                meta: {
-                  booking_jurisdiction: meta.booking_jurisdiction,
-                  regulator: meta.regulator,
-                  booking_datetime: meta.booking_datetime,
-                  amount: Number(amountStr || 0),
-                  currency,
-                  originator_name: meta.originator_name,
-                  originator_country: meta.originator_country,
-                  beneficiary_name: meta.beneficiary_name,
-                  beneficiary_country: meta.beneficiary_country,
-                  travel_rule_complete: meta.travel_rule_complete,
-                  sanctions_screening: meta.sanctions_screening,
-                  customer_risk_rating: meta.customer_risk_rating,
-                },
+                meta: displayMeta,
               });
             } catch {}
 
@@ -385,8 +383,7 @@ export async function POST(req: Request) {
             try {
               await runSentinelSequential(init, write);
             } catch (error: unknown) {
-              const message =
-                error instanceof Error ? error.message : String(error ?? "");
+              const message = error instanceof Error ? error.message : String(error ?? "");
               await write({
                 type: "on_error",
                 payload: {
@@ -413,8 +410,7 @@ export async function POST(req: Request) {
             }
             count++;
           } catch (rowError: unknown) {
-            const message =
-              rowError instanceof Error ? rowError.message : String(rowError ?? "");
+            const message = rowError instanceof Error ? rowError.message : String(rowError ?? "");
             await write({
               type: "on_error",
               payload: {

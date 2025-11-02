@@ -38,11 +38,6 @@ export async function POST(req: Request) {
       status: 'open',
     };
 
-    // If a documentId was provided and looks like a UUID-ish string, attach it
-    if (documentId) {
-      insertPayload.document_id = documentId;
-    }
-
     const { data, error } = await supabase
       .from('aml_cases')
       .insert([insertPayload])
@@ -53,7 +48,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: error.message ?? String(error) }, { status: 500 });
     }
 
-    // Optionally, you could also insert file links into a related table.
+    // If files were uploaded, link each uploaded document to the new case via aml_case_documents.
+    // Files array items are expected to contain the inserted document under `document.id`.
+    try {
+      const linksToCreate: Array<{ aml_case_id: string; document_id: string }> = [];
+
+      if (Array.isArray(files) && files.length > 0) {
+        for (const f of files) {
+          const docId = f?.document?.id ?? f?.document_id ?? f?.id ?? null;
+          if (docId) linksToCreate.push({ aml_case_id: data.id, document_id: docId });
+        }
+      }
+
+      // also support a single documentId param for compatibility
+      if (documentId && !linksToCreate.find((l) => l.document_id === documentId)) {
+        linksToCreate.push({ aml_case_id: data.id, document_id: documentId });
+      }
+
+      if (linksToCreate.length > 0) {
+        await supabase.from('aml_case_documents').insert(linksToCreate);
+      }
+    } catch (err) {
+      // non-fatal: log and continue. The case was created successfully.
+      // eslint-disable-next-line no-console
+      console.warn('Failed to create aml_case_documents links:', err);
+    }
 
     return NextResponse.json({ ok: true, case: data }, { status: 200 });
   } catch (err: any) {

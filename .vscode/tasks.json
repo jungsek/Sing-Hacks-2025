@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Typecheck - Next/Turbo Repo",
+			"type": "shell",
+			"command": "npm run -w singhacks typecheck",
+			"problemMatcher": [
+				"$tsc"
+			]
+		}
+	]
+}

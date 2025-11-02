@@ -1,4 +1,6 @@
 import { transactionNode } from "@/app/langgraph/teams/sentinel/nodes/transaction";
+import { crossReferenceNode } from "@/app/langgraph/teams/sentinel/nodes/crossref";
+import { evaluateNode } from "@/app/langgraph/teams/sentinel/nodes/evaluate";
 import { regulatoryNode } from "@/app/langgraph/teams/sentinel/nodes/regulatory";
 import { alertNode } from "@/app/langgraph/teams/sentinel/nodes/alert";
 import type { SentinelState } from "@/app/langgraph/common/state";
@@ -37,6 +39,12 @@ export function buildSentinelGraph() {
   graph.addNode("transaction", async (state: SentinelState) => {
     return await transactionNode(state);
   });
+  graph.addNode("crossref", async (state: SentinelState) => {
+    return await crossReferenceNode(state);
+  });
+  graph.addNode("evaluate", async (state: SentinelState) => {
+    return await evaluateNode(state);
+  });
   graph.addNode("regulatory", async (state: SentinelState) => {
     return await regulatoryNode(state);
   });
@@ -46,7 +54,9 @@ export function buildSentinelGraph() {
 
   // Simple sequential flow for MVP
   graph.addEdge("__start__", "transaction");
-  graph.addEdge("transaction", "regulatory");
+  graph.addEdge("transaction", "crossref");
+  graph.addEdge("crossref", "evaluate");
+  graph.addEdge("evaluate", "regulatory");
   graph.addEdge("regulatory", "alert");
   graph.addEdge("alert", "__end__");
 
@@ -154,6 +164,100 @@ export async function runSentinelSequential(
       node: "transaction",
       status: "end",
       payload: { score: state.score, rule_hits: state.rule_hits },
+    });
+  } catch {}
+
+  // Level 2 (cross-reference) runs for all, but does not clutter the list feed; still log events
+  await safeEmit({
+    type: "on_node_start",
+    payload: {
+      run_id: runId,
+      graph: "sentinel",
+      node: "crossref",
+      ts: now(),
+      data: { regulator: state.transaction?.meta?.regulator ?? null },
+    },
+  });
+  try {
+    await logAgentRun({
+      run_id: runId,
+      graph: "sentinel",
+      node: "crossref",
+      status: "start",
+      payload: { regulator: state.transaction?.meta?.regulator ?? null },
+    });
+  } catch {}
+
+  const beforeSnippets = state.regulatory_snippets?.length ?? 0;
+  state = { ...state, ...(await crossReferenceNode(state)) };
+  const afterSnippets = state.regulatory_snippets?.length ?? 0;
+  const newSnippetCount = Math.max(0, afterSnippets - beforeSnippets);
+  const newSnippets =
+    newSnippetCount > 0 && state.regulatory_snippets
+      ? state.regulatory_snippets.slice(-newSnippetCount)
+      : [];
+
+  await safeEmit({
+    type: "on_node_end",
+    payload: {
+      run_id: runId,
+      graph: "sentinel",
+      node: "crossref",
+      ts: now(),
+      data: { snippets_new: newSnippets },
+    },
+  });
+  try {
+    await logAgentRun({
+      run_id: runId,
+      graph: "sentinel",
+      node: "crossref",
+      status: "end",
+      payload: { snippets_new: newSnippets?.length ?? 0 },
+    });
+  } catch {}
+
+  // Level 3 (evaluation) refines score and emits brief rationale content via event details
+  await safeEmit({
+    type: "on_node_start",
+    payload: {
+      run_id: runId,
+      graph: "sentinel",
+      node: "evaluate",
+      ts: now(),
+      data: { rule_hits: state.rule_hits?.length ?? 0 },
+    },
+  });
+  try {
+    await logAgentRun({
+      run_id: runId,
+      graph: "sentinel",
+      node: "evaluate",
+      status: "start",
+      payload: { rule_hits: state.rule_hits?.length ?? 0 },
+    });
+  } catch {}
+
+  const evalUpdate = await evaluateNode(state);
+  const oldScore = state.score;
+  state = { ...state, ...evalUpdate };
+  await safeEmit({
+    type: "on_node_end",
+    payload: {
+      run_id: runId,
+      graph: "sentinel",
+      node: "evaluate",
+      ts: now(),
+      data: { score_before: oldScore, score_after: state.score },
+    },
+  });
+  try {
+    await logAgentRun({
+      run_id: runId,
+      graph: "sentinel",
+      node: "evaluate",
+      status: "end",
+      payload: { score_before: oldScore, score_after: state.score },
     });
   } catch {}
 
@@ -362,8 +466,3 @@ export async function runSentinelSequential(
 
   return state;
 }
-
-
-
-
-
