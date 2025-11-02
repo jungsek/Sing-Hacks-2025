@@ -565,9 +565,9 @@ export default function TransactionsPage() {
                         <td className="px-4 py-3 text-muted-foreground">{txn.reason}</td>
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Button size="sm" variant="outline" onClick={() => setSelected(txn)}>
+                            {/* <Button size="sm" variant="outline" onClick={() => setSelected(txn)}>
                               View
-                            </Button>
+                            </Button> */}
                             <Button size="sm" variant="ghost" asChild>
                               <Link href={`/transactions/${txn.transaction_id}`}>Drill-down</Link>
                             </Button>

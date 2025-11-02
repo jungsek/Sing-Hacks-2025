@@ -203,21 +203,43 @@ export function TransactionDrilldown({
           </div>
           <div className="flex items-center gap-3">
             {scorePercent !== null && (
-              <div className="flex flex-col items-end">
-                <span className="text-xs text-muted-foreground">Risk score</span>
-                <span className="text-base font-semibold text-foreground">
-                  {effectiveScore?.toFixed(2)} ({scorePercent}%)
-                </span>
-              </div>
-            )}
-            <Badge variant={severityBadgeVariant(effectiveSeverity ?? null)} className="capitalize">
+          <div className="flex flex-col items-end">
+            <span className="text-xs text-muted-foreground">Risk score</span>
+            <span
+              className={`text-base font-semibold ${
+                effectiveSeverity === "high"
+                  ? "text-red-600 dark:text-red-400"
+                  : effectiveSeverity === "medium"
+                    ? "text-amber-600 dark:text-amber-400"
+                    : effectiveSeverity === "low"
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-foreground"
+              }`}
+            >
+              {effectiveScore?.toFixed(2)} ({scorePercent}%)
+            </span>
+          </div>
+        )}
+
+        <Badge
+              variant={severityBadgeVariant(effectiveSeverity ?? null)}
+              className={`capitalize ${
+                effectiveSeverity === "high"
+                  ? "bg-red-100 text-red-700 border-red-300"
+                  : effectiveSeverity === "medium"
+                    ? "bg-amber-100 text-amber-700 border-amber-300"
+                    : effectiveSeverity === "low"
+                      ? "bg-emerald-100 text-emerald-700 border-emerald-300"
+                      : ""
+              }`}
+            >
               {effectiveSeverity === "high"
                 ? "High Risk"
                 : effectiveSeverity === "medium"
                   ? "Moderate Risk"
                   : effectiveSeverity === "low"
                     ? "Low Risk"
-                    : "severity pending"}
+                    : "Severity Pending"}
             </Badge>
           </div>
         </CardHeader>
@@ -235,7 +257,17 @@ export function TransactionDrilldown({
             </div>
             <div className="rounded-lg border border-border/40 bg-muted/20 p-4">
               <p className="text-xs uppercase text-muted-foreground">Customer risk</p>
-              <p className="text-lg font-semibold text-foreground">
+              <p
+                className={`text-lg font-semibold ${
+                  String(meta.customer_risk_rating).toLowerCase().includes("high")
+                    ? "text-red-600 dark:text-red-400"
+                    : String(meta.customer_risk_rating).toLowerCase().includes("medium")
+                      ? "text-amber-600 dark:text-amber-400"
+                      : String(meta.customer_risk_rating).toLowerCase().includes("low")
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-foreground"
+                }`}
+              >
                 {formatValue(meta.customer_risk_rating)}
               </p>
             </div>
